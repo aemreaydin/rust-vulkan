@@ -1,33 +1,211 @@
-use crate::{instance::VInstance, surface::VSurface, RendererResult};
+use crate::{
+    instance::VInstance, queue_family::VQueueFamilyIndices, surface::VSurface, RendererResult,
+};
 use ash::vk::{
-    self, PhysicalDevice, PhysicalDeviceFeatures, PhysicalDeviceProperties, PhysicalDeviceType,
-    SurfaceKHR,
+    ColorSpaceKHR, Format, PhysicalDevice, PhysicalDeviceProperties, PhysicalDeviceType,
+    PresentModeKHR, QueueFamilyProperties, QueueFlags, SurfaceFormatKHR, SurfaceKHR,
 };
 use ash::{extensions::khr::Surface, Instance};
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 enum PhysicalDeviceError {
     #[error("The system has no suitable physical devices.")]
     SuitableDeviceNotFound,
+    #[error("Failed to find compatible queue families")]
+    IncompatibleQueueFamilies,
+}
+
+struct VPhysicalDeviceInformation {
+    properties: PhysicalDeviceProperties,
+    // features: PhysicalDeviceFeatures,
+    queue_family_properties: Vec<QueueFamilyProperties>,
+    // surface_capabilities: SurfaceCapabilitiesKHR,
+    surface_formats: Vec<SurfaceFormatKHR>,
+    surface_present_modes: Vec<PresentModeKHR>,
+}
+
+impl VPhysicalDeviceInformation {
+    const OPTIMAL_FORMAT: Format = Format::B8G8R8A8_SRGB;
+    const OPTIMAL_COLOR_SPACE: ColorSpaceKHR = ColorSpaceKHR::SRGB_NONLINEAR;
+
+    pub fn generate(
+        instance: &Instance,
+        surface: &Surface,
+        surface_khr: SurfaceKHR,
+        physical_device: PhysicalDevice,
+    ) -> RendererResult<Self> {
+        let properties = unsafe { instance.get_physical_device_properties(physical_device) };
+        let _features = unsafe { instance.get_physical_device_features(physical_device) };
+        let queue_family_properties =
+            unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
+        let _surface_capabilities = unsafe {
+            surface.get_physical_device_surface_capabilities(physical_device, surface_khr)?
+        };
+        let surface_formats =
+            unsafe { surface.get_physical_device_surface_formats(physical_device, surface_khr)? };
+        let surface_present_modes = unsafe {
+            surface.get_physical_device_surface_present_modes(physical_device, surface_khr)?
+        };
+        Ok(Self {
+            properties,
+            // features,
+            queue_family_properties,
+            // surface_capabilities,
+            surface_formats,
+            surface_present_modes,
+        })
+    }
+
+    fn rate_device(&self) -> usize {
+        let type_score = match self.properties.device_type {
+            PhysicalDeviceType::DISCRETE_GPU => 100,
+            PhysicalDeviceType::INTEGRATED_GPU => 25,
+            _ => 0,
+        };
+
+        let format_score = match self.choose_surface_format() {
+            SurfaceFormatKHR {
+                format: Self::OPTIMAL_FORMAT,
+                color_space: Self::OPTIMAL_COLOR_SPACE,
+            } => 100,
+            _ => 25,
+        };
+
+        let present_mode_score = match self.choose_present_mode() {
+            PresentModeKHR::MAILBOX => 100,
+            PresentModeKHR::FIFO => 25,
+            _ => 0,
+        };
+
+        type_score + format_score + present_mode_score
+    }
+
+    fn choose_surface_format(&self) -> SurfaceFormatKHR {
+        if let Some(&format) = self.surface_formats.iter().find(|surface_format| {
+            surface_format.format == Format::B8G8R8A8_SRGB
+                && surface_format.color_space == ColorSpaceKHR::SRGB_NONLINEAR
+        }) {
+            return format;
+        }
+
+        self.surface_formats[0]
+    }
+
+    fn choose_present_mode(&self) -> PresentModeKHR {
+        if let Some(&mode) = self
+            .surface_present_modes
+            .iter()
+            .find(|&&mode| mode == PresentModeKHR::MAILBOX)
+        {
+            return mode;
+        }
+
+        // This is required to be supported
+        PresentModeKHR::FIFO
+    }
 }
 
 pub struct VPhysicalDevice<'a> {
     instance: &'a VInstance,
     surface: &'a VSurface,
+    physical_device: PhysicalDevice,
+    queue_family_indices: VQueueFamilyIndices,
 }
 
 impl<'a> VPhysicalDevice<'a> {
     pub fn new(instance: &'a VInstance, surface: &'a VSurface) -> RendererResult<Self> {
-        let best_device = Self::choose_best_device(
-            &instance.instance(),
+        let physical_device = Self::find_optimal_device(
+            instance.instance(),
             surface.surface(),
-            *surface.surface_khr(),
+            surface.surface_khr(),
         )?;
-        Ok(Self { instance, surface })
+
+        let queue_family_indices =
+            Self::get_queue_family_indices(instance, surface, physical_device)?;
+
+        Ok(Self {
+            instance,
+            surface,
+            physical_device,
+            queue_family_indices,
+        })
     }
 
-    fn choose_best_device(
+    pub fn instance(&self) -> &Instance {
+        self.instance.instance()
+    }
+
+    pub fn surface_khr(&self) -> SurfaceKHR {
+        self.surface.surface_khr()
+    }
+
+    pub fn physical_device(&self) -> PhysicalDevice {
+        self.physical_device
+    }
+
+    pub fn queue_family_indices(&self) -> VQueueFamilyIndices {
+        self.queue_family_indices
+    }
+
+    fn get_queue_family_indices(
+        instance: &'a VInstance,
+        surface: &'a VSurface,
+        physical_device: PhysicalDevice,
+    ) -> RendererResult<VQueueFamilyIndices> {
+        let physical_device_information = VPhysicalDeviceInformation::generate(
+            instance.instance(),
+            surface.surface(),
+            surface.surface_khr(),
+            physical_device,
+        )?;
+
+        let present = if let Some(index) = physical_device_information
+            .queue_family_properties
+            .iter()
+            .enumerate()
+            .position(|(index, _family)| unsafe {
+                match surface.surface().get_physical_device_surface_support(
+                    physical_device,
+                    index as u32,
+                    surface.surface_khr(),
+                ) {
+                    Ok(res) => res,
+                    Err(err) => panic!("{}", err),
+                }
+            }) {
+            index as u32
+        } else {
+            return Err(Box::new(PhysicalDeviceError::IncompatibleQueueFamilies));
+        };
+
+        let compute = match physical_device_information
+            .queue_family_properties
+            .iter()
+            .position(|family| family.queue_flags.contains(QueueFlags::COMPUTE))
+        {
+            Some(index) => index as u32,
+            None => return Err(Box::new(PhysicalDeviceError::IncompatibleQueueFamilies)),
+        };
+
+        let graphics = match physical_device_information
+            .queue_family_properties
+            .iter()
+            .position(|family| family.queue_flags.contains(QueueFlags::GRAPHICS))
+        {
+            Some(index) => index as u32,
+            None => return Err(Box::new(PhysicalDeviceError::IncompatibleQueueFamilies)),
+        };
+
+        Ok(VQueueFamilyIndices {
+            present,
+            compute,
+            graphics,
+        })
+    }
+
+    fn find_optimal_device(
         instance: &Instance,
         surface: &Surface,
         surface_khr: SurfaceKHR,
@@ -37,37 +215,16 @@ impl<'a> VPhysicalDevice<'a> {
             return Err(Box::new(PhysicalDeviceError::SuitableDeviceNotFound));
         }
 
-        let best_device = devices[0];
-        let props = unsafe { instance.get_physical_device_properties(best_device) };
-        let features = unsafe { instance.get_physical_device_features(best_device) };
-        let queue_families =
-            unsafe { instance.get_physical_device_queue_family_properties(best_device) };
-        let surface_capabilities =
-            unsafe { surface.get_physical_device_surface_capabilities(best_device, surface_khr)? };
-        let surface_formats =
-            unsafe { surface.get_physical_device_surface_formats(best_device, surface_khr)? };
-        let surface_present_modes =
-            unsafe { surface.get_physical_device_surface_present_modes(best_device, surface_khr)? };
-        // let surface_support = unsafe { surface.get_physical_device_surface_support(best_device, surface_khr)?};
-        println!("{:#?}", props);
-        println!("{:#?}", features);
-        println!("{:#?}", queue_families);
-        println!("{:#?}", surface_capabilities);
-        println!("{:#?}", surface_formats);
-        println!("{:#?}", surface_present_modes);
-        Ok(devices[0])
-    }
-
-    fn rate_device(
-        device_props: &PhysicalDeviceProperties,
-        device_features: &PhysicalDeviceFeatures,
-    ) -> f64 {
-        let type_score = match device_props.device_type {
-            PhysicalDeviceType::DISCRETE_GPU => 100.0,
-            PhysicalDeviceType::INTEGRATED_GPU => 25.0,
-            _ => 0.0,
-        };
-        0.0
+        // TODO Needs testing
+        match devices.iter().max_by_key(|&&device| {
+            match VPhysicalDeviceInformation::generate(instance, surface, surface_khr, device) {
+                Ok(info) => info.rate_device(),
+                Err(_) => 0,
+            }
+        }) {
+            Some(&device) => Ok(device),
+            None => Err(Box::new(PhysicalDeviceError::SuitableDeviceNotFound)),
+        }
     }
 }
 
@@ -83,7 +240,7 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         let surface =
-            VSurface::create_surface(&instance.instance(), &EventLoopExtWindows::new_any_thread())?;
+            VSurface::create_surface(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
         VPhysicalDevice::new(&instance, &surface)?;
 
         Ok(())

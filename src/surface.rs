@@ -1,5 +1,4 @@
 use ash::{extensions::khr::Surface, vk::SurfaceKHR, Instance};
-use std::sync::Arc;
 use winit::{
     dpi::PhysicalSize,
     event_loop::EventLoop,
@@ -10,7 +9,7 @@ use crate::RendererResult;
 
 pub struct VSurface {
     surface: Surface,
-    surface_khr: Arc<SurfaceKHR>,
+    surface_khr: SurfaceKHR,
     window: Window,
 }
 
@@ -29,7 +28,7 @@ impl VSurface {
 
         Ok(Self {
             surface,
-            surface_khr: Arc::new(surface_khr),
+            surface_khr,
             window,
         })
     }
@@ -38,8 +37,8 @@ impl VSurface {
         &self.surface
     }
 
-    pub fn surface_khr(&self) -> Arc<SurfaceKHR> {
-        self.surface_khr.clone()
+    pub fn surface_khr(&self) -> SurfaceKHR {
+        self.surface_khr
     }
 
     pub fn window(&self) -> &Window {
@@ -55,9 +54,10 @@ mod tests {
 
     #[test]
     fn creates_surface() -> RendererResult<()> {
-        let instance = VInstance::create("Test", 0)?.instance();
+        let instance = VInstance::create("Test", 0)?;
+        let instance = instance.instance();
         #[cfg(target_os = "windows")]
-        VSurface::create_surface(&instance, &EventLoopExtWindows::new_any_thread())?;
+        VSurface::create_surface(instance, &EventLoopExtWindows::new_any_thread())?;
 
         Ok(())
     }

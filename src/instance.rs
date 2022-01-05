@@ -1,12 +1,9 @@
 use crate::RendererResult;
-use ash::vk;
-use std::{
-    ffi::{CStr, CString},
-    sync::Arc,
-};
+use ash::{vk, Instance};
+use std::ffi::{CStr, CString};
 
 pub struct VInstance {
-    instance: Arc<ash::Instance>,
+    instance: Instance,
 }
 
 impl VInstance {
@@ -26,13 +23,11 @@ impl VInstance {
         };
 
         let instance = unsafe { entry.create_instance(&create_info, None)? };
-        Ok(Self {
-            instance: Arc::new(instance),
-        })
+        Ok(Self { instance })
     }
 
-    pub fn instance(&self) -> Arc<ash::Instance> {
-        self.instance.clone()
+    pub fn instance(&self) -> &Instance {
+        &self.instance
     }
 
     fn application_info(name: &str, application_version: u32) -> vk::ApplicationInfo {
@@ -128,9 +123,7 @@ impl VInstanceBuilder {
 
         let instance =
             unsafe { entry.create_instance(&create_info, self.allocation_callbacks.as_ref())? };
-        Ok(VInstance {
-            instance: Arc::new(instance),
-        })
+        Ok(VInstance { instance })
     }
 }
 
