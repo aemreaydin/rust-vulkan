@@ -44,6 +44,10 @@ impl VSurface {
     pub fn window(&self) -> &Window {
         &self.window
     }
+
+    pub fn dimensions(&self) -> PhysicalSize<u32> {
+        self.window.inner_size()
+    }
 }
 
 #[cfg(test)]

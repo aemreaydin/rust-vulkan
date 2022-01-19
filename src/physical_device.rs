@@ -3,7 +3,8 @@ use crate::{
 };
 use ash::vk::{
     ColorSpaceKHR, Format, PhysicalDevice, PhysicalDeviceProperties, PhysicalDeviceType,
-    PresentModeKHR, QueueFamilyProperties, QueueFlags, SurfaceFormatKHR, SurfaceKHR,
+    PresentModeKHR, QueueFamilyProperties, QueueFlags, SurfaceCapabilitiesKHR, SurfaceFormatKHR,
+    SurfaceKHR,
 };
 use ash::{extensions::khr::Surface, Instance};
 use thiserror::Error;
@@ -16,13 +17,13 @@ enum PhysicalDeviceError {
     IncompatibleQueueFamilies,
 }
 
-struct VPhysicalDeviceInformation {
-    properties: PhysicalDeviceProperties,
-    // features: PhysicalDeviceFeatures,
-    queue_family_properties: Vec<QueueFamilyProperties>,
-    // surface_capabilities: SurfaceCapabilitiesKHR,
-    surface_formats: Vec<SurfaceFormatKHR>,
-    surface_present_modes: Vec<PresentModeKHR>,
+pub struct VPhysicalDeviceInformation {
+    pub properties: PhysicalDeviceProperties,
+    // pub features: PhysicalDeviceFeatures,
+    pub queue_family_properties: Vec<QueueFamilyProperties>,
+    pub surface_capabilities: SurfaceCapabilitiesKHR,
+    pub surface_formats: Vec<SurfaceFormatKHR>,
+    pub surface_present_modes: Vec<PresentModeKHR>,
 }
 
 impl VPhysicalDeviceInformation {
@@ -39,7 +40,7 @@ impl VPhysicalDeviceInformation {
         let _features = unsafe { instance.get_physical_device_features(physical_device) };
         let queue_family_properties =
             unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
-        let _surface_capabilities = unsafe {
+        let surface_capabilities = unsafe {
             surface.get_physical_device_surface_capabilities(physical_device, surface_khr)?
         };
         let surface_formats =
@@ -51,7 +52,7 @@ impl VPhysicalDeviceInformation {
             properties,
             // features,
             queue_family_properties,
-            // surface_capabilities,
+            surface_capabilities,
             surface_formats,
             surface_present_modes,
         })
@@ -81,7 +82,7 @@ impl VPhysicalDeviceInformation {
         type_score + format_score + present_mode_score
     }
 
-    fn choose_surface_format(&self) -> SurfaceFormatKHR {
+    pub fn choose_surface_format(&self) -> SurfaceFormatKHR {
         if let Some(&format) = self.surface_formats.iter().find(|surface_format| {
             surface_format.format == Format::B8G8R8A8_SRGB
                 && surface_format.color_space == ColorSpaceKHR::SRGB_NONLINEAR
@@ -92,7 +93,7 @@ impl VPhysicalDeviceInformation {
         self.surface_formats[0]
     }
 
-    fn choose_present_mode(&self) -> PresentModeKHR {
+    pub fn choose_present_mode(&self) -> PresentModeKHR {
         if let Some(&mode) = self
             .surface_present_modes
             .iter()
@@ -111,6 +112,7 @@ pub struct VPhysicalDevice<'a> {
     surface: &'a VSurface,
     physical_device: PhysicalDevice,
     queue_family_indices: VQueueFamilyIndices,
+    physical_device_information: VPhysicalDeviceInformation,
 }
 
 impl<'a> VPhysicalDevice<'a> {
@@ -121,19 +123,31 @@ impl<'a> VPhysicalDevice<'a> {
             surface.surface_khr(),
         )?;
 
+        let physical_device_information = VPhysicalDeviceInformation::generate(
+            instance.instance(),
+            surface.surface(),
+            surface.surface_khr(),
+            physical_device,
+        )?;
+
         let queue_family_indices =
-            Self::get_queue_family_indices(instance, surface, physical_device)?;
+            Self::get_queue_family_indices(physical_device, surface, &physical_device_information)?;
 
         Ok(Self {
             instance,
             surface,
             physical_device,
             queue_family_indices,
+            physical_device_information,
         })
     }
 
     pub fn instance(&self) -> &Instance {
         self.instance.instance()
+    }
+
+    pub fn surface(&self) -> &VSurface {
+        self.surface
     }
 
     pub fn surface_khr(&self) -> SurfaceKHR {
@@ -148,18 +162,23 @@ impl<'a> VPhysicalDevice<'a> {
         self.queue_family_indices
     }
 
-    fn get_queue_family_indices(
-        instance: &'a VInstance,
-        surface: &'a VSurface,
-        physical_device: PhysicalDevice,
-    ) -> RendererResult<VQueueFamilyIndices> {
-        let physical_device_information = VPhysicalDeviceInformation::generate(
-            instance.instance(),
-            surface.surface(),
-            surface.surface_khr(),
-            physical_device,
-        )?;
+    pub fn physical_device_information(&self) -> &VPhysicalDeviceInformation {
+        &self.physical_device_information
+    }
 
+    pub fn surface_format(&self) -> SurfaceFormatKHR {
+        self.physical_device_information.choose_surface_format()
+    }
+
+    pub fn present_mode(&self) -> PresentModeKHR {
+        self.physical_device_information.choose_present_mode()
+    }
+
+    fn get_queue_family_indices(
+        physical_device: PhysicalDevice,
+        surface: &VSurface,
+        physical_device_information: &VPhysicalDeviceInformation,
+    ) -> RendererResult<VQueueFamilyIndices> {
         let present = if let Some(index) = physical_device_information
             .queue_family_properties
             .iter()

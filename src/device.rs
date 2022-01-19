@@ -6,17 +6,18 @@ use crate::{
 use ash::{
     extensions::khr::Swapchain,
     vk::{DeviceCreateInfo, DeviceQueueCreateInfo, Queue},
-    Device,
+    Device, Instance,
 };
 use std::collections::HashSet;
 
-pub struct VDevice {
+pub struct VDevice<'a> {
     device: Device,
     queues: VQueues,
+    physical_device: &'a VPhysicalDevice<'a>,
 }
 
-impl VDevice {
-    pub fn new(physical_device: &VPhysicalDevice) -> RendererResult<Self> {
+impl<'a> VDevice<'a> {
+    pub fn new(physical_device: &'a VPhysicalDevice) -> RendererResult<Self> {
         let queue_infos = Self::device_queue_create_infos(physical_device.queue_family_indices());
         let extensions = [Swapchain::name().as_ptr()];
         let device_create_info = Self::device_create_info(&queue_infos, &extensions);
@@ -29,7 +30,11 @@ impl VDevice {
         };
 
         let queues = VQueues::new(&device, physical_device.queue_family_indices());
-        Ok(Self { device, queues })
+        Ok(Self {
+            device,
+            queues,
+            physical_device,
+        })
     }
 
     pub fn device(&self) -> &Device {
@@ -38,6 +43,14 @@ impl VDevice {
 
     pub fn get_queue(&self, queue_type: VQueueType) -> Queue {
         self.queues.get_queue(queue_type)
+    }
+
+    pub fn physical_device(&self) -> &VPhysicalDevice {
+        self.physical_device
+    }
+
+    pub fn instance(&self) -> &Instance {
+        self.physical_device.instance()
     }
 
     fn device_create_info(
