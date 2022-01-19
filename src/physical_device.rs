@@ -6,7 +6,6 @@ use ash::vk::{
     PresentModeKHR, QueueFamilyProperties, QueueFlags, SurfaceFormatKHR, SurfaceKHR,
 };
 use ash::{extensions::khr::Surface, Instance};
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -239,9 +238,13 @@ mod tests {
         let instance = VInstance::create("Test", 0)?;
 
         #[cfg(target_os = "windows")]
-        let surface =
-            VSurface::create_surface(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
-        VPhysicalDevice::new(&instance, &surface)?;
+        {
+            let surface = VSurface::create_surface(
+                instance.instance(),
+                &EventLoopExtWindows::new_any_thread(),
+            )?;
+            VPhysicalDevice::new(&instance, &surface)?;
+        }
 
         Ok(())
     }
