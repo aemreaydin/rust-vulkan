@@ -14,7 +14,7 @@ pub struct VSurface {
 }
 
 impl VSurface {
-    pub fn create_surface(instance: &Instance, event_loop: &EventLoop<()>) -> RendererResult<Self> {
+    pub fn new(instance: &Instance, event_loop: &EventLoop<()>) -> RendererResult<Self> {
         let entry = ash::Entry::linked();
 
         // TODO Use JSON to get these information
@@ -62,7 +62,7 @@ mod tests {
         let instance = VInstance::new("Test", 0)?;
         let instance = instance.instance();
         #[cfg(target_os = "windows")]
-        let surface = VSurface::create_surface(instance, &EventLoopExtWindows::new_any_thread())?;
+        let surface = VSurface::new(instance, &EventLoopExtWindows::new_any_thread())?;
 
         assert_ne!(surface.surface_khr.as_raw(), 0);
 

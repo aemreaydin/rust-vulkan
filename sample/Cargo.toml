@@ -7,3 +7,4 @@ version = "0.1.0"
 
 [dependencies]
 vulkan_renderer = {path = "../vulkan_renderer"}
+winit = "0.26.1"

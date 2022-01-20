@@ -258,10 +258,8 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let surface = VSurface::create_surface(
-                instance.instance(),
-                &EventLoopExtWindows::new_any_thread(),
-            )?;
+            let surface =
+                VSurface::new(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
             VPhysicalDevice::new(&instance, &surface)?;
         }
 
