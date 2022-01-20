@@ -1,11 +1,12 @@
 use crate::{
+    command_pool::VCommandPools,
     physical_device::VPhysicalDevice,
     queue_family::{VQueueFamilyIndices, VQueueType, VQueues},
     RendererResult,
 };
 use ash::{
     extensions::khr::Swapchain,
-    vk::{DeviceCreateInfo, DeviceQueueCreateInfo, Queue},
+    vk::{CommandPool, DeviceCreateInfo, DeviceQueueCreateInfo, Queue},
     Device, Instance,
 };
 use std::collections::HashSet;
@@ -13,6 +14,7 @@ use std::collections::HashSet;
 pub struct VDevice<'a> {
     device: Device,
     queues: VQueues,
+    command_pools: VCommandPools,
     physical_device: &'a VPhysicalDevice<'a>,
 }
 
@@ -30,10 +32,12 @@ impl<'a> VDevice<'a> {
         };
 
         let queues = VQueues::new(&device, physical_device.queue_family_indices());
+        let command_pools = VCommandPools::new(&device, physical_device.queue_family_indices())?;
         Ok(Self {
             device,
             queues,
             physical_device,
+            command_pools,
         })
     }
 
@@ -53,6 +57,10 @@ impl<'a> VDevice<'a> {
         self.physical_device.instance()
     }
 
+    pub fn get_command_pool(&self, queue_type: VQueueType) -> CommandPool {
+        self.command_pools.get_command_pool(queue_type)
+    }
+
     fn device_create_info(
         queue_infos: &[DeviceQueueCreateInfo],
         extensions: &[*const i8],
@@ -66,6 +74,7 @@ impl<'a> VDevice<'a> {
         }
     }
 
+    // This makes no sense probably
     fn device_queue_create_infos(
         queue_family_indices: VQueueFamilyIndices,
     ) -> Vec<DeviceQueueCreateInfo> {
@@ -100,11 +109,12 @@ impl<'a> VDevice<'a> {
 #[cfg(test)]
 mod tests {
     use super::{VDevice, VPhysicalDevice};
-    use crate::{instance::VInstance, surface::VSurface, RendererResult};
+    use crate::{instance::VInstance, queue_family::VQueueType, surface::VSurface, RendererResult};
+    use ash::vk::Handle;
     use winit::platform::windows::EventLoopExtWindows;
 
     #[test]
-    fn creates_physical_device() -> RendererResult<()> {
+    fn creates_device() -> RendererResult<()> {
         let instance = VInstance::create("Test", 0)?;
 
         #[cfg(target_os = "windows")]
@@ -114,7 +124,35 @@ mod tests {
                 &EventLoopExtWindows::new_any_thread(),
             )?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            VDevice::new(&physical_device)?;
+            let device = VDevice::new(&physical_device)?;
+
+            // Queues
+            assert_ne!(device.queues.compute.as_raw(), 0);
+            assert_ne!(device.queues.graphics.as_raw(), 0);
+            assert_ne!(device.queues.present.as_raw(), 0);
+
+            // Command Pools
+            assert_ne!(
+                device
+                    .command_pools
+                    .get_command_pool(VQueueType::Compute)
+                    .as_raw(),
+                0
+            );
+            assert_ne!(
+                device
+                    .command_pools
+                    .get_command_pool(VQueueType::Graphics)
+                    .as_raw(),
+                0
+            );
+            assert_ne!(
+                device
+                    .command_pools
+                    .get_command_pool(VQueueType::Present)
+                    .as_raw(),
+                0
+            );
         }
         Ok(())
     }

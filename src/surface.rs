@@ -54,6 +54,7 @@ impl VSurface {
 mod tests {
     use super::VSurface;
     use crate::{instance::VInstance, RendererResult};
+    use ash::vk::Handle;
     use winit::platform::windows::EventLoopExtWindows;
 
     #[test]
@@ -61,7 +62,9 @@ mod tests {
         let instance = VInstance::create("Test", 0)?;
         let instance = instance.instance();
         #[cfg(target_os = "windows")]
-        VSurface::create_surface(instance, &EventLoopExtWindows::new_any_thread())?;
+        let surface = VSurface::create_surface(instance, &EventLoopExtWindows::new_any_thread())?;
+
+        assert_ne!(surface.surface_khr.as_raw(), 0);
 
         Ok(())
     }

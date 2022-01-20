@@ -85,10 +85,11 @@ impl VSwapchain {
 mod tests {
     use super::{VDevice, VPhysicalDevice, VSwapchain};
     use crate::{instance::VInstance, surface::VSurface, RendererResult};
+    use ash::vk::Handle;
     use winit::platform::windows::EventLoopExtWindows;
 
     #[test]
-    fn creates_physical_device() -> RendererResult<()> {
+    fn creates_swapchain() -> RendererResult<()> {
         let instance = VInstance::create("Test", 0)?;
 
         #[cfg(target_os = "windows")]
@@ -100,7 +101,8 @@ mod tests {
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
             let device = VDevice::new(&physical_device)?;
 
-            VSwapchain::new(&device)?;
+            let swapchain = VSwapchain::new(&device)?;
+            assert_ne!(swapchain.swapchain_khr.as_raw(), 0);
         }
         Ok(())
     }
