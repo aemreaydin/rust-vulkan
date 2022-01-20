@@ -1,12 +1,16 @@
 use crate::{
     command_pool::VCommandPools,
+    enums::EOperationType,
     physical_device::VPhysicalDevice,
-    queue_family::{VQueueFamilyIndices, VQueueType, VQueues},
+    queue_family::{VQueueFamilyIndices, VQueues},
     RendererResult,
 };
 use ash::{
     extensions::khr::Swapchain,
-    vk::{CommandPool, DeviceCreateInfo, DeviceQueueCreateInfo, Queue},
+    vk::{
+        CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, CommandPool,
+        DeviceCreateInfo, DeviceQueueCreateInfo, Queue,
+    },
     Device, Instance,
 };
 use std::collections::HashSet;
@@ -41,12 +45,31 @@ impl<'a> VDevice<'a> {
         })
     }
 
+    pub fn allocate_command_buffers(
+        device: &VDevice,
+        command_buffer_count: u32,
+        operation_type: EOperationType,
+    ) -> RendererResult<Vec<CommandBuffer>> {
+        let command_buffer_allocate_info = CommandBufferAllocateInfo {
+            command_buffer_count,
+            level: CommandBufferLevel::PRIMARY,
+            command_pool: device.get_command_pool(operation_type),
+            ..Default::default()
+        };
+
+        unsafe {
+            Ok(device
+                .device
+                .allocate_command_buffers(&command_buffer_allocate_info)?)
+        }
+    }
+
     pub fn device(&self) -> &Device {
         &self.device
     }
 
-    pub fn get_queue(&self, queue_type: VQueueType) -> Queue {
-        self.queues.get_queue(queue_type)
+    pub fn get_queue(&self, operation_type: EOperationType) -> Queue {
+        self.queues.get_queue(operation_type)
     }
 
     pub fn physical_device(&self) -> &VPhysicalDevice {
@@ -57,8 +80,8 @@ impl<'a> VDevice<'a> {
         self.physical_device.instance()
     }
 
-    pub fn get_command_pool(&self, queue_type: VQueueType) -> CommandPool {
-        self.command_pools.get_command_pool(queue_type)
+    pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {
+        self.command_pools.get_command_pool(operation_type)
     }
 
     fn device_create_info(
@@ -109,13 +132,13 @@ impl<'a> VDevice<'a> {
 #[cfg(test)]
 mod tests {
     use super::{VDevice, VPhysicalDevice};
-    use crate::{instance::VInstance, queue_family::VQueueType, surface::VSurface, RendererResult};
+    use crate::{enums::EOperationType, instance::VInstance, surface::VSurface, RendererResult};
     use ash::vk::Handle;
     use winit::platform::windows::EventLoopExtWindows;
 
     #[test]
     fn creates_device() -> RendererResult<()> {
-        let instance = VInstance::create("Test", 0)?;
+        let instance = VInstance::new("Test", 0)?;
 
         #[cfg(target_os = "windows")]
         {
@@ -130,30 +153,33 @@ mod tests {
             assert_ne!(device.queues.compute.as_raw(), 0);
             assert_ne!(device.queues.graphics.as_raw(), 0);
             assert_ne!(device.queues.present.as_raw(), 0);
-
-            // Command Pools
-            assert_ne!(
-                device
-                    .command_pools
-                    .get_command_pool(VQueueType::Compute)
-                    .as_raw(),
-                0
-            );
-            assert_ne!(
-                device
-                    .command_pools
-                    .get_command_pool(VQueueType::Graphics)
-                    .as_raw(),
-                0
-            );
-            assert_ne!(
-                device
-                    .command_pools
-                    .get_command_pool(VQueueType::Present)
-                    .as_raw(),
-                0
-            );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn creates_command_buffers() -> RendererResult<()> {
+        let instance = VInstance::new("Test", 0)?;
+
+        #[cfg(target_os = "windows")]
+        {
+            let surface = VSurface::create_surface(
+                instance.instance(),
+                &EventLoopExtWindows::new_any_thread(),
+            )?;
+            let physical_device = VPhysicalDevice::new(&instance, &surface)?;
+            let device = VDevice::new(&physical_device)?;
+
+            let num_buffers = 3;
+            let command_buffers =
+                VDevice::allocate_command_buffers(&device, num_buffers, EOperationType::Graphics)?;
+
+            assert_eq!(command_buffers.len(), num_buffers as usize);
+            for buffer in command_buffers {
+                assert_ne!(buffer.as_raw(), 0);
+            }
+        }
+
         Ok(())
     }
 }

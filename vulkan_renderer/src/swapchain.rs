@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn creates_swapchain() -> RendererResult<()> {
-        let instance = VInstance::create("Test", 0)?;
+        let instance = VInstance::new("Test", 0)?;
 
         #[cfg(target_os = "windows")]
         {

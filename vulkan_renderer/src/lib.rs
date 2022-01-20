@@ -1,5 +1,6 @@
 pub mod command_pool;
 pub mod device;
+pub mod enums;
 pub mod instance;
 pub mod physical_device;
 pub mod queue_family;

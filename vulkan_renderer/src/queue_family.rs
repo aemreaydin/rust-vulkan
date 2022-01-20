@@ -1,3 +1,4 @@
+use crate::enums::EOperationType;
 use ash::{vk::Queue, Device};
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -5,12 +6,6 @@ pub struct VQueueFamilyIndices {
     pub compute: u32,
     pub graphics: u32,
     pub present: u32,
-}
-
-pub enum VQueueType {
-    Compute,
-    Graphics,
-    Present,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -32,11 +27,11 @@ impl VQueues {
         }
     }
 
-    pub fn get_queue(&self, queue_type: VQueueType) -> Queue {
-        match queue_type {
-            VQueueType::Compute => self.compute,
-            VQueueType::Graphics => self.graphics,
-            VQueueType::Present => self.present,
+    pub fn get_queue(&self, operation_type: EOperationType) -> Queue {
+        match operation_type {
+            EOperationType::Compute => self.compute,
+            EOperationType::Graphics => self.graphics,
+            EOperationType::Present => self.present,
         }
     }
 }

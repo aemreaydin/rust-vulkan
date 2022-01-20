@@ -59,7 +59,7 @@ mod tests {
 
     #[test]
     fn creates_surface() -> RendererResult<()> {
-        let instance = VInstance::create("Test", 0)?;
+        let instance = VInstance::new("Test", 0)?;
         let instance = instance.instance();
         #[cfg(target_os = "windows")]
         let surface = VSurface::create_surface(instance, &EventLoopExtWindows::new_any_thread())?;

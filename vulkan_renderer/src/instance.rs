@@ -64,7 +64,7 @@ pub struct VInstance {
 }
 
 impl VInstance {
-    pub fn create(name: &str, version: u32) -> RendererResult<Self> {
+    pub fn new(name: &str, version: u32) -> RendererResult<Self> {
         let entry = Entry::linked();
 
         let application_info = Self::application_info(name, version);
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn creates_instance() -> RendererResult<()> {
-        VInstance::create("Test", 1)?;
+        VInstance::new("Test", 1)?;
         Ok(())
     }
 
