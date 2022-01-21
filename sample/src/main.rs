@@ -1,5 +1,6 @@
 use vulkan_renderer::{
-    device::VDevice, instance::VInstance, physical_device::VPhysicalDevice, surface::VSurface,
+    device::VDevice, instance::VInstance, physical_device::VPhysicalDevice,
+    render_pass::VRenderPass, surface::VSurface, swapchain::VSwapchain,
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -14,7 +15,9 @@ fn main() {
 
     let physical_device =
         VPhysicalDevice::new(&instance, &surface).expect("Failed to create physical device.");
-    let _device = VDevice::new(&physical_device).expect("Failed to create device.");
+    let device = VDevice::new(&physical_device).expect("Failed to create device.");
+    let swapchain = VSwapchain::new(&device).expect("Failed to create swapchain.");
+    let render_pass = VRenderPass::new(&device).expect("Failed to create render pass.");
 
     event_loop.run(|event, _, control_flow| {
         *control_flow = ControlFlow::Poll;

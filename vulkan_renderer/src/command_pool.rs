@@ -36,7 +36,7 @@ impl VCommandPools {
 
     fn command_pool_create_info(queue_family_index: u32) -> CommandPoolCreateInfo {
         CommandPoolCreateInfo {
-            flags: CommandPoolCreateFlags::TRANSIENT,
+            flags: CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
             queue_family_index,
             ..Default::default()
         }

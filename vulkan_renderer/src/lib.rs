@@ -4,6 +4,7 @@ pub mod enums;
 pub mod instance;
 pub mod physical_device;
 pub mod queue_family;
+pub mod render_pass;
 pub mod surface;
 pub mod swapchain;
 
