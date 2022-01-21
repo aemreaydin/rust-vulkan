@@ -1,11 +1,10 @@
+use crate::RendererResult;
 use ash::{extensions::khr::Surface, vk::SurfaceKHR, Instance};
 use winit::{
     dpi::PhysicalSize,
     event_loop::EventLoop,
     window::{Window, WindowBuilder},
 };
-
-use crate::RendererResult;
 
 pub struct VSurface {
     surface: Surface,

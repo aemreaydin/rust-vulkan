@@ -1,28 +1,24 @@
-use ash::vk::{
-    AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp, Format,
-    ImageLayout, PipelineBindPoint, RenderPass, RenderPassCreateInfo, SampleCountFlags,
-    SubpassDescription,
+use crate::RendererResult;
+use ash::{
+    vk::{
+        AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp, Format,
+        ImageLayout, PipelineBindPoint, RenderPass, RenderPassCreateInfo, SampleCountFlags,
+        SubpassDescription,
+    },
+    Device,
 };
-
-use crate::{device::VDevice, RendererResult};
 
 pub struct VRenderPass {
     render_pass: RenderPass,
 }
 
 impl VRenderPass {
-    pub fn new(device: &VDevice) -> RendererResult<Self> {
-        let attachments = Self::attachment_descriptions(
-            device
-                .physical_device()
-                .physical_device_information()
-                .choose_surface_format()
-                .format,
-        );
+    pub fn new(device: &Device, format: Format) -> RendererResult<Self> {
+        let attachments = Self::attachment_descriptions(format);
         let subpass_descriptions = Self::subpass_dependencies();
         let create_info = Self::render_pass_create_info(&attachments, &subpass_descriptions);
 
-        let render_pass = unsafe { device.device().create_render_pass(&create_info, None)? };
+        let render_pass = unsafe { device.create_render_pass(&create_info, None)? };
         Ok(Self { render_pass })
     }
 
@@ -96,7 +92,13 @@ mod tests {
                 VSurface::new(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
             let device = VDevice::new(&physical_device)?;
-            let render_pass = VRenderPass::new(&device)?;
+            let render_pass = VRenderPass::new(
+                device.device(),
+                physical_device
+                    .physical_device_information()
+                    .choose_surface_format()
+                    .format,
+            )?;
 
             assert_ne!(render_pass.render_pass.as_raw(), 0);
         }

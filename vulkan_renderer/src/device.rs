@@ -3,23 +3,25 @@ use crate::{
     enums::EOperationType,
     physical_device::VPhysicalDevice,
     queue_family::{VQueueFamilyIndices, VQueues},
+    render_pass::VRenderPass,
     RendererResult,
 };
 use ash::{
     extensions::khr::Swapchain,
     vk::{
         CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, CommandPool,
-        DeviceCreateInfo, DeviceQueueCreateInfo, Queue,
+        DeviceCreateInfo, DeviceQueueCreateInfo, Queue, RenderPass,
     },
     Device, Instance,
 };
 use std::collections::HashSet;
 
 pub struct VDevice<'a> {
+    physical_device: &'a VPhysicalDevice<'a>,
     device: Device,
     queues: VQueues,
     command_pools: VCommandPools,
-    physical_device: &'a VPhysicalDevice<'a>,
+    render_pass: VRenderPass,
 }
 
 impl<'a> VDevice<'a> {
@@ -37,11 +39,20 @@ impl<'a> VDevice<'a> {
 
         let queues = VQueues::new(&device, physical_device.queue_family_indices());
         let command_pools = VCommandPools::new(&device, physical_device.queue_family_indices())?;
+        let render_pass = VRenderPass::new(
+            &device,
+            physical_device
+                .physical_device_information()
+                .choose_surface_format()
+                .format,
+        )?;
+
         Ok(Self {
             device,
             queues,
             physical_device,
             command_pools,
+            render_pass,
         })
     }
 
@@ -78,6 +89,10 @@ impl<'a> VDevice<'a> {
 
     pub fn instance(&self) -> &Instance {
         self.physical_device.instance()
+    }
+
+    pub fn render_pass(&self) -> RenderPass {
+        self.render_pass.render_pass()
     }
 
     pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {

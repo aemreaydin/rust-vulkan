@@ -1,3 +1,4 @@
+use crate::{device::VDevice, physical_device::VPhysicalDevice, RendererResult};
 use ash::{
     extensions::khr::Swapchain,
     vk::{
@@ -6,8 +7,6 @@ use ash::{
         ImageViewType, SharingMode, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
-
-use crate::{device::VDevice, physical_device::VPhysicalDevice, RendererResult};
 
 pub struct VSwapchain {
     swapchain: Swapchain,
@@ -48,6 +47,10 @@ impl VSwapchain {
         self.image_views.get(image_ind).copied()
     }
 
+    pub fn get_image_views(&self) -> &[ImageView] {
+        &self.image_views
+    }
+
     fn create_image_views(device: &VDevice, images: &[Image]) -> RendererResult<Vec<ImageView>> {
         let format = device
             .physical_device()
@@ -59,8 +62,7 @@ impl VSwapchain {
             .iter()
             .map(|&image| {
                 let create_info = Self::image_view_create_info(image, format);
-                let image_view = unsafe { device.device().create_image_view(&create_info, None) };
-                image_view
+                unsafe { device.device().create_image_view(&create_info, None) }
             })
             .collect();
         match image_views_result {
