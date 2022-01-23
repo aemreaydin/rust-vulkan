@@ -23,7 +23,7 @@ impl VRenderPass {
         Ok(Self { render_pass })
     }
 
-    pub fn render_pass(&self) -> RenderPass {
+    pub fn get(&self) -> RenderPass {
         self.render_pass
     }
 
@@ -98,7 +98,7 @@ mod tests {
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
             let device = VDevice::new(&instance, &physical_device)?;
             let render_pass = VRenderPass::new(
-                &device.device(),
+                &device.get(),
                 physical_device
                     .physical_device_information()
                     .choose_surface_format()

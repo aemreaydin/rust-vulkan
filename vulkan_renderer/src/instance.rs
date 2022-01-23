@@ -84,7 +84,7 @@ impl VInstance {
         })
     }
 
-    pub fn instance(&self) -> Arc<Instance> {
+    pub fn get(&self) -> Arc<Instance> {
         self.instance.clone()
     }
 

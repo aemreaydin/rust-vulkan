@@ -9,11 +9,11 @@ pub struct VFence {
 impl VFence {
     pub fn new(device: &VDevice, is_signaled: bool) -> RendererResult<Self> {
         let create_info = Self::fence_create_info(is_signaled);
-        let fence = unsafe { device.device().create_fence(&create_info, None)? };
+        let fence = unsafe { device.get().create_fence(&create_info, None)? };
         Ok(Self { fence })
     }
 
-    pub fn fence(&self) -> Fence {
+    pub fn get(&self) -> Fence {
         self.fence
     }
 
@@ -36,11 +36,11 @@ pub struct VSemaphore {
 impl VSemaphore {
     pub fn new(device: &VDevice) -> RendererResult<Self> {
         let create_info = Self::semaphore_create_info();
-        let semaphore = unsafe { device.device().create_semaphore(&create_info, None)? };
+        let semaphore = unsafe { device.get().create_semaphore(&create_info, None)? };
         Ok(Self { semaphore })
     }
 
-    pub fn semaphore(&self) -> Semaphore {
+    pub fn get(&self) -> Semaphore {
         self.semaphore
     }
 

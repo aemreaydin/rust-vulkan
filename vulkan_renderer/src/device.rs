@@ -33,11 +33,9 @@ impl VDevice {
         let extensions = [Swapchain::name().as_ptr()];
         let device_create_info = Self::device_create_info(&queue_infos, &extensions);
         let device = unsafe {
-            instance.instance().create_device(
-                physical_device.physical_device(),
-                &device_create_info,
-                None,
-            )?
+            instance
+                .get()
+                .create_device(physical_device.get(), &device_create_info, None)?
         };
 
         let queues = VQueues::new(&device, physical_device.queue_family_indices());
@@ -58,20 +56,20 @@ impl VDevice {
         })
     }
 
-    pub fn device(&self) -> Arc<Device> {
+    pub fn get(&self) -> Arc<Device> {
         self.device.clone()
     }
 
     pub fn get_queue(&self, operation_type: EOperationType) -> Queue {
-        self.queues.get_queue(operation_type)
+        self.queues.get(operation_type)
     }
 
     pub fn render_pass(&self) -> RenderPass {
-        self.render_pass.render_pass()
+        self.render_pass.get()
     }
 
     pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {
-        self.command_pools.get_command_pool(operation_type)
+        self.command_pools.get(operation_type)
     }
 
     pub fn allocate_command_buffers(
@@ -219,8 +217,8 @@ impl VDevice {
     ) -> RendererResult<()> {
         let extension_props = unsafe {
             instance
-                .instance()
-                .enumerate_device_extension_properties(physical_device.physical_device())?
+                .get()
+                .enumerate_device_extension_properties(physical_device.get())?
         };
         println!("{:#?}", extension_props);
         Ok(())

@@ -27,7 +27,7 @@ impl VSwapchain {
         device: &VDevice,
         surface: &VSurface,
     ) -> RendererResult<Self> {
-        let swapchain = Swapchain::new(&instance.instance(), &device.device());
+        let swapchain = Swapchain::new(&instance.get(), &device.get());
         let create_info = Self::swapchain_create_info(physical_device, surface);
         let swapchain_khr = unsafe { swapchain.create_swapchain(&create_info, None) }?;
         let images = unsafe { swapchain.get_swapchain_images(swapchain_khr)? };
@@ -110,7 +110,7 @@ impl VSwapchain {
             .iter()
             .map(|&image| {
                 let create_info = Self::image_view_create_info(image, format);
-                unsafe { device.device().create_image_view(&create_info, None) }
+                unsafe { device.get().create_image_view(&create_info, None) }
             })
             .collect();
         match image_views_result {

@@ -27,7 +27,7 @@ impl VQueues {
         }
     }
 
-    pub fn get_queue(&self, operation_type: EOperationType) -> Queue {
+    pub fn get(&self, operation_type: EOperationType) -> Queue {
         match operation_type {
             EOperationType::Compute => self.compute,
             EOperationType::Graphics => self.graphics,

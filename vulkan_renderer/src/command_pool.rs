@@ -26,7 +26,7 @@ impl VCommandPools {
         })
     }
 
-    pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {
+    pub fn get(&self, operation_type: EOperationType) -> CommandPool {
         match operation_type {
             EOperationType::Compute => self.compute_pool,
             EOperationType::Graphics => self.graphics_pool,
@@ -63,25 +63,10 @@ mod tests {
             let device = VDevice::new(&instance, &physical_device)?;
 
             let command_pools =
-                VCommandPools::new(&device.device(), physical_device.queue_family_indices())?;
-            assert_ne!(
-                command_pools
-                    .get_command_pool(EOperationType::Compute)
-                    .as_raw(),
-                0
-            );
-            assert_ne!(
-                command_pools
-                    .get_command_pool(EOperationType::Graphics)
-                    .as_raw(),
-                0
-            );
-            assert_ne!(
-                command_pools
-                    .get_command_pool(EOperationType::Present)
-                    .as_raw(),
-                0
-            );
+                VCommandPools::new(&device.get(), physical_device.queue_family_indices())?;
+            assert_ne!(command_pools.get(EOperationType::Compute).as_raw(), 0);
+            assert_ne!(command_pools.get(EOperationType::Graphics).as_raw(), 0);
+            assert_ne!(command_pools.get(EOperationType::Present).as_raw(), 0);
         }
         Ok(())
     }

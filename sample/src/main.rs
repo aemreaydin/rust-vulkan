@@ -38,7 +38,7 @@ fn main() {
 
     let mut frame_count = 0;
     event_loop.run(move |event, _, control_flow| {
-        let fences = &[fence.fence()];
+        let fences = &[fence.get()];
         device
             .wait_for_fences(fences, 1_000_000_000)
             .expect("Failed to wait for fences.");
@@ -47,7 +47,7 @@ fn main() {
             .expect("Failed to reset fences.");
 
         let (image_ind, _is_suboptimal) = swapchain
-            .acquire_next_image(1_000_000_000, Some(present_semaphore.semaphore()), None)
+            .acquire_next_image(1_000_000_000, Some(present_semaphore.get()), None)
             .expect("Failed to acquire next image.");
 
         let flash = (frame_count as f32 / 1200.0).sin().abs();
@@ -74,8 +74,8 @@ fn main() {
             .expect("Failed to end command buffer.");
 
         let command_buffers = &[command_buffer];
-        let wait_semaphores = &[present_semaphore.semaphore()];
-        let dst_semaphores = &[graphics_semaphore.semaphore()];
+        let wait_semaphores = &[present_semaphore.get()];
+        let dst_semaphores = &[graphics_semaphore.get()];
         let pipeline_stage_flags = &[PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let submit_info = VDevice::create_queue_submit_info(
             command_buffers,
@@ -88,13 +88,13 @@ fn main() {
             .queue_submit(
                 device.get_queue(EOperationType::Graphics),
                 &[submit_info],
-                fence.fence(),
+                fence.get(),
             )
             .expect("Failed to submit queue.");
 
         let image_indices = &[image_ind];
         let swapchains = &[swapchain.swapchain_khr()];
-        let wait_semaphores = &[graphics_semaphore.semaphore()];
+        let wait_semaphores = &[graphics_semaphore.get()];
         let present_info =
             VSwapchain::create_present_info(image_indices, swapchains, wait_semaphores);
         swapchain

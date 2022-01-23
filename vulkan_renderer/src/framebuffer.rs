@@ -19,7 +19,7 @@ impl VFramebuffers {
                 let attachments = vec![image_view];
                 let create_info =
                     Self::framebuffer_create_info(&attachments, device.render_pass(), dimensions);
-                unsafe { device.device().create_framebuffer(&create_info, None) }
+                unsafe { device.get().create_framebuffer(&create_info, None) }
             })
             .collect();
 
@@ -31,7 +31,7 @@ impl VFramebuffers {
         Ok(Self { framebuffers })
     }
 
-    pub fn get_framebuffer(&self, framebuffer_ind: usize) -> Option<Framebuffer> {
+    pub fn get(&self, framebuffer_ind: usize) -> Option<Framebuffer> {
         self.framebuffers.get(framebuffer_ind).copied()
     }
 

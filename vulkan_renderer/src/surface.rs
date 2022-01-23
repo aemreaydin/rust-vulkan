@@ -26,9 +26,9 @@ impl VSurface {
             .with_inner_size(PhysicalSize::new(1920, 1080))
             .build(event_loop)?;
 
-        let surface = Surface::new(&entry, &instance.instance());
+        let surface = Surface::new(&entry, &instance.get());
         let surface_khr =
-            unsafe { ash_window::create_surface(&entry, &instance.instance(), &window, None)? };
+            unsafe { ash_window::create_surface(&entry, &instance.get(), &window, None)? };
 
         Ok(Self {
             surface: Arc::new(surface),
