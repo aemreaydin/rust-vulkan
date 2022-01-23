@@ -4,13 +4,14 @@ use crate::{
     physical_device::VPhysicalDevice,
     queue_family::{VQueueFamilyIndices, VQueues},
     render_pass::VRenderPass,
+    sync::VFence,
     RendererResult,
 };
 use ash::{
     extensions::khr::Swapchain,
     vk::{
         CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, CommandPool,
-        DeviceCreateInfo, DeviceQueueCreateInfo, Queue, RenderPass,
+        DeviceCreateInfo, DeviceQueueCreateInfo, Fence, Queue, RenderPass,
     },
     Device, Instance,
 };
@@ -97,6 +98,16 @@ impl<'a> VDevice<'a> {
 
     pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {
         self.command_pools.get_command_pool(operation_type)
+    }
+
+    pub fn wait_for_fences(&self, fences: &[Fence], timeout: u64) -> RendererResult<()> {
+        unsafe { self.device.wait_for_fences(fences, true, timeout)? }
+        Ok(())
+    }
+
+    pub fn reset_fences(&self, fences: &[Fence]) -> RendererResult<()> {
+        unsafe { self.device.reset_fences(fences)? }
+        Ok(())
     }
 
     fn device_create_info(
