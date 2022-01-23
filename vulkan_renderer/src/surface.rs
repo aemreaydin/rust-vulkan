@@ -1,5 +1,6 @@
-use crate::RendererResult;
-use ash::{extensions::khr::Surface, vk::SurfaceKHR, Instance};
+use crate::{instance::VInstance, RendererResult};
+use ash::{extensions::khr::Surface, vk::SurfaceKHR};
+use std::sync::Arc;
 use winit::{
     dpi::PhysicalSize,
     event_loop::EventLoop,
@@ -7,13 +8,13 @@ use winit::{
 };
 
 pub struct VSurface {
-    surface: Surface,
+    surface: Arc<Surface>,
     surface_khr: SurfaceKHR,
-    window: Window,
+    window: Arc<Window>,
 }
 
 impl VSurface {
-    pub fn new(instance: &Instance, event_loop: &EventLoop<()>) -> RendererResult<Self> {
+    pub fn new(instance: &VInstance, event_loop: &EventLoop<()>) -> RendererResult<Self> {
         let entry = ash::Entry::linked();
 
         // TODO Use JSON to get these information
@@ -22,13 +23,14 @@ impl VSurface {
             .with_inner_size(PhysicalSize::new(1920, 1080))
             .build(event_loop)?;
 
-        let surface = Surface::new(&entry, instance);
-        let surface_khr = unsafe { ash_window::create_surface(&entry, instance, &window, None)? };
+        let surface = Surface::new(&entry, &instance.instance());
+        let surface_khr =
+            unsafe { ash_window::create_surface(&entry, &instance.instance(), &window, None)? };
 
         Ok(Self {
-            surface,
+            surface: Arc::new(surface),
             surface_khr,
-            window,
+            window: Arc::new(window),
         })
     }
 
@@ -59,9 +61,8 @@ mod tests {
     #[test]
     fn creates_surface() -> RendererResult<()> {
         let instance = VInstance::new("Test", 0)?;
-        let instance = instance.instance();
         #[cfg(target_os = "windows")]
-        let surface = VSurface::new(instance, &EventLoopExtWindows::new_any_thread())?;
+        let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
 
         assert_ne!(surface.surface_khr.as_raw(), 0);
 

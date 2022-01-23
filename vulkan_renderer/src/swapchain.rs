@@ -1,4 +1,7 @@
-use crate::{device::VDevice, physical_device::VPhysicalDevice, RendererResult};
+use crate::{
+    device::VDevice, instance::VInstance, physical_device::VPhysicalDevice, surface::VSurface,
+    RendererResult,
+};
 use ash::{
     extensions::khr::Swapchain,
     vk::{
@@ -7,24 +10,30 @@ use ash::{
         ImageViewType, SharingMode, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
+use std::sync::Arc;
 
 pub struct VSwapchain {
-    swapchain: Swapchain,
+    swapchain: Arc<Swapchain>,
     swapchain_khr: SwapchainKHR,
     images: Vec<Image>,
     image_views: Vec<ImageView>,
 }
 
 impl VSwapchain {
-    pub fn new(device: &VDevice) -> RendererResult<Self> {
-        let swapchain = Swapchain::new(device.instance(), device.device());
-        let create_info = Self::swapchain_create_info(device.physical_device());
+    pub fn new(
+        instance: &VInstance,
+        physical_device: &VPhysicalDevice,
+        device: &VDevice,
+        surface: &VSurface,
+    ) -> RendererResult<Self> {
+        let swapchain = Swapchain::new(&instance.instance(), &device.device());
+        let create_info = Self::swapchain_create_info(physical_device, surface);
         let swapchain_khr = unsafe { swapchain.create_swapchain(&create_info, None) }?;
         let images = unsafe { swapchain.get_swapchain_images(swapchain_khr)? };
-        let image_views = Self::create_image_views(device, &images)?;
+        let image_views = Self::create_image_views(physical_device, device, &images)?;
 
         Ok(Self {
-            swapchain,
+            swapchain: Arc::new(swapchain),
             swapchain_khr,
             images,
             image_views,
@@ -51,9 +60,12 @@ impl VSwapchain {
         &self.image_views
     }
 
-    fn create_image_views(device: &VDevice, images: &[Image]) -> RendererResult<Vec<ImageView>> {
-        let format = device
-            .physical_device()
+    fn create_image_views(
+        physical_device: &VPhysicalDevice,
+        device: &VDevice,
+        images: &[Image],
+    ) -> RendererResult<Vec<ImageView>> {
+        let format = physical_device
             .physical_device_information()
             .choose_surface_format()
             .format;
@@ -71,7 +83,10 @@ impl VSwapchain {
         }
     }
 
-    fn swapchain_create_info(physical_device: &VPhysicalDevice) -> SwapchainCreateInfoKHR {
+    fn swapchain_create_info(
+        physical_device: &VPhysicalDevice,
+        surface: &VSurface,
+    ) -> SwapchainCreateInfoKHR {
         let phys_dev_info = physical_device.physical_device_information();
         let min_image_count = phys_dev_info.surface_capabilities.min_image_count;
         let max_image_count = phys_dev_info.surface_capabilities.max_image_count;
@@ -84,8 +99,8 @@ impl VSwapchain {
         let image_color_space = phys_dev_info.choose_surface_format().color_space;
         let present_mode = phys_dev_info.choose_present_mode();
         let image_extent = Extent2D {
-            width: physical_device.surface().dimensions().width,
-            height: physical_device.surface().dimensions().height,
+            width: surface.dimensions().width,
+            height: surface.dimensions().height,
         };
         let image_usage = ImageUsageFlags::COLOR_ATTACHMENT;
         let sharing_mode = SharingMode::EXCLUSIVE;
@@ -102,7 +117,7 @@ impl VSwapchain {
         let clipped = true;
         let image_array_layers = 1;
         SwapchainCreateInfoKHR {
-            surface: physical_device.surface_khr(),
+            surface: surface.surface_khr(),
             min_image_count: desired_image_count,
             image_format,
             image_color_space,
@@ -154,12 +169,11 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let surface =
-                VSurface::new(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
+            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&physical_device)?;
+            let device = VDevice::new(&instance, &physical_device)?;
 
-            let swapchain = VSwapchain::new(&device)?;
+            let swapchain = VSwapchain::new(&instance, &physical_device, &device, &surface)?;
             assert_ne!(swapchain.swapchain_khr.as_raw(), 0);
 
             assert_eq!(swapchain.image_views.len(), swapchain.images.len());

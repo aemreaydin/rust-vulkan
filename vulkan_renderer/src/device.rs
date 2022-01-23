@@ -1,10 +1,10 @@
 use crate::{
     command_pool::VCommandPools,
     enums::EOperationType,
+    instance::VInstance,
     physical_device::VPhysicalDevice,
     queue_family::{VQueueFamilyIndices, VQueues},
     render_pass::VRenderPass,
-    sync::VFence,
     RendererResult,
 };
 use ash::{
@@ -13,25 +13,25 @@ use ash::{
         CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, CommandPool,
         DeviceCreateInfo, DeviceQueueCreateInfo, Fence, Queue, RenderPass,
     },
-    Device, Instance,
+    Device,
 };
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
-pub struct VDevice<'a> {
-    physical_device: &'a VPhysicalDevice<'a>,
-    device: Device,
+/// Keeps tracks of the logical device, queues, command_pools and the render_pass
+pub struct VDevice {
+    device: Arc<Device>,
     queues: VQueues,
     command_pools: VCommandPools,
     render_pass: VRenderPass,
 }
 
-impl<'a> VDevice<'a> {
-    pub fn new(physical_device: &'a VPhysicalDevice) -> RendererResult<Self> {
+impl VDevice {
+    pub fn new(instance: &VInstance, physical_device: &VPhysicalDevice) -> RendererResult<Self> {
         let queue_infos = Self::device_queue_create_infos(physical_device.queue_family_indices());
         let extensions = [Swapchain::name().as_ptr()];
         let device_create_info = Self::device_create_info(&queue_infos, &extensions);
         let device = unsafe {
-            physical_device.instance().create_device(
+            instance.instance().create_device(
                 physical_device.physical_device(),
                 &device_create_info,
                 None,
@@ -49,12 +49,27 @@ impl<'a> VDevice<'a> {
         )?;
 
         Ok(Self {
-            device,
+            device: Arc::new(device),
             queues,
-            physical_device,
             command_pools,
             render_pass,
         })
+    }
+
+    pub fn device(&self) -> Arc<Device> {
+        self.device.clone()
+    }
+
+    pub fn get_queue(&self, operation_type: EOperationType) -> Queue {
+        self.queues.get_queue(operation_type)
+    }
+
+    pub fn render_pass(&self) -> RenderPass {
+        self.render_pass.render_pass()
+    }
+
+    pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {
+        self.command_pools.get_command_pool(operation_type)
     }
 
     pub fn allocate_command_buffers(
@@ -74,30 +89,6 @@ impl<'a> VDevice<'a> {
                 .device
                 .allocate_command_buffers(&command_buffer_allocate_info)?)
         }
-    }
-
-    pub fn device(&self) -> &Device {
-        &self.device
-    }
-
-    pub fn get_queue(&self, operation_type: EOperationType) -> Queue {
-        self.queues.get_queue(operation_type)
-    }
-
-    pub fn physical_device(&self) -> &VPhysicalDevice {
-        self.physical_device
-    }
-
-    pub fn instance(&self) -> &Instance {
-        self.physical_device.instance()
-    }
-
-    pub fn render_pass(&self) -> RenderPass {
-        self.render_pass.render_pass()
-    }
-
-    pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {
-        self.command_pools.get_command_pool(operation_type)
     }
 
     pub fn wait_for_fences(&self, fences: &[Fence], timeout: u64) -> RendererResult<()> {
@@ -144,9 +135,12 @@ impl<'a> VDevice<'a> {
     }
 
     #[allow(dead_code)]
-    fn get_device_extensions(physical_device: &VPhysicalDevice) -> RendererResult<()> {
+    fn get_device_extensions(
+        instance: &VInstance,
+        physical_device: &VPhysicalDevice,
+    ) -> RendererResult<()> {
         let extension_props = unsafe {
-            physical_device
+            instance
                 .instance()
                 .enumerate_device_extension_properties(physical_device.physical_device())?
         };
@@ -168,10 +162,9 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let surface =
-                VSurface::new(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
+            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&physical_device)?;
+            let device = VDevice::new(&instance, &physical_device)?;
 
             // Queues
             assert_ne!(device.queues.compute.as_raw(), 0);
@@ -187,10 +180,9 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let surface =
-                VSurface::new(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
+            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&physical_device)?;
+            let device = VDevice::new(&instance, &physical_device)?;
 
             let num_buffers = 3;
             let command_buffers =

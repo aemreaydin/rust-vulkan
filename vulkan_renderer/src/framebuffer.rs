@@ -66,11 +66,10 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let surface =
-                VSurface::new(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
+            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&physical_device)?;
-            let swapchain = VSwapchain::new(&device)?;
+            let device = VDevice::new(&instance, &physical_device)?;
+            let swapchain = VSwapchain::new(&instance, &physical_device, &device, &surface)?;
             let framebuffers =
                 VFramebuffers::new(&device, swapchain.get_image_views(), surface.dimensions())?;
 

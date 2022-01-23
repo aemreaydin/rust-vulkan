@@ -8,6 +8,7 @@ use colored::*;
 use std::{
     borrow::Cow,
     ffi::{c_void, CStr, CString},
+    sync::Arc,
 };
 
 unsafe extern "system" fn vulkan_debug_callback(
@@ -58,7 +59,7 @@ const IS_VALIDATION_ENABLED: bool = true;
 const IS_VALIDATION_ENABLED: bool = false;
 
 pub struct VInstance {
-    instance: Instance,
+    instance: Arc<Instance>,
     _debug_utils: Option<DebugUtils>,
     _debug_callback: Option<vk::DebugUtilsMessengerEXT>,
 }
@@ -77,14 +78,14 @@ impl VInstance {
             Self::create_debug_utils_and_callback(&entry, &instance)?;
 
         Ok(Self {
-            instance,
+            instance: Arc::new(instance),
             _debug_utils: debug_utils,
             _debug_callback: debug_callback,
         })
     }
 
-    pub fn instance(&self) -> &Instance {
-        &self.instance
+    pub fn instance(&self) -> Arc<Instance> {
+        self.instance.clone()
     }
 
     fn application_info(name: &str, application_version: u32) -> vk::ApplicationInfo {
@@ -247,7 +248,7 @@ impl VInstanceBuilder {
             VInstance::create_debug_utils_and_callback(&entry, &instance)?;
 
         Ok(VInstance {
-            instance,
+            instance: Arc::new(instance),
             _debug_utils: debug_utils,
             _debug_callback: debug_callback,
         })

@@ -58,13 +58,12 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let surface =
-                VSurface::new(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
+            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&physical_device)?;
+            let device = VDevice::new(&instance, &physical_device)?;
 
             let command_pools =
-                VCommandPools::new(device.device(), physical_device.queue_family_indices())?;
+                VCommandPools::new(&device.device(), physical_device.queue_family_indices())?;
             assert_ne!(
                 command_pools
                     .get_command_pool(EOperationType::Compute)

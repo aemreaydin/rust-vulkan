@@ -107,24 +107,22 @@ impl VPhysicalDeviceInformation {
     }
 }
 
-pub struct VPhysicalDevice<'a> {
-    instance: &'a VInstance,
-    surface: &'a VSurface,
+pub struct VPhysicalDevice {
     physical_device: PhysicalDevice,
     queue_family_indices: VQueueFamilyIndices,
     physical_device_information: VPhysicalDeviceInformation,
 }
 
-impl<'a> VPhysicalDevice<'a> {
-    pub fn new(instance: &'a VInstance, surface: &'a VSurface) -> RendererResult<Self> {
+impl VPhysicalDevice {
+    pub fn new(instance: &VInstance, surface: &VSurface) -> RendererResult<Self> {
         let physical_device = Self::find_optimal_device(
-            instance.instance(),
+            &instance.instance(),
             surface.surface(),
             surface.surface_khr(),
         )?;
 
         let physical_device_information = VPhysicalDeviceInformation::generate(
-            instance.instance(),
+            &instance.instance(),
             surface.surface(),
             surface.surface_khr(),
             physical_device,
@@ -134,24 +132,10 @@ impl<'a> VPhysicalDevice<'a> {
             Self::get_queue_family_indices(physical_device, surface, &physical_device_information)?;
 
         Ok(Self {
-            instance,
-            surface,
             physical_device,
             queue_family_indices,
             physical_device_information,
         })
-    }
-
-    pub fn instance(&self) -> &Instance {
-        self.instance.instance()
-    }
-
-    pub fn surface(&self) -> &VSurface {
-        self.surface
-    }
-
-    pub fn surface_khr(&self) -> SurfaceKHR {
-        self.surface.surface_khr()
     }
 
     pub fn physical_device(&self) -> PhysicalDevice {
@@ -258,8 +242,7 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let surface =
-                VSurface::new(instance.instance(), &EventLoopExtWindows::new_any_thread())?;
+            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
             VPhysicalDevice::new(&instance, &surface)?;
         }
 
