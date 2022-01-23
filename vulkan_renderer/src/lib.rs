@@ -6,6 +6,7 @@ pub mod instance;
 pub mod physical_device;
 pub mod queue_family;
 pub mod render_pass;
+pub mod shader_utils;
 pub mod surface;
 pub mod swapchain;
 pub mod sync;

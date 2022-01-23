@@ -4,6 +4,7 @@ use vulkan_renderer::{
     framebuffer::VFramebuffers,
     instance::VInstance,
     physical_device::VPhysicalDevice,
+    shader_utils::VShaderUtils,
     surface::VSurface,
     swapchain::VSwapchain,
     sync::{VFence, VSemaphore},
@@ -15,10 +16,10 @@ use winit::{
 };
 
 fn main() {
+    // Device Vars
     let event_loop = EventLoop::new();
     let instance = VInstance::new("Sample", 0).expect("Failed to create instance.");
     let surface = VSurface::new(&instance, &event_loop).expect("Failed to create surface.");
-
     let physical_device =
         VPhysicalDevice::new(&instance, &surface).expect("Failed to create physical device.");
     let device = VDevice::new(&instance, &physical_device).expect("Failed to create device.");
@@ -31,6 +32,18 @@ fn main() {
         .allocate_command_buffers(1, EOperationType::Graphics)
         .expect("Failed to allocate command buffers.")[0];
 
+    println!("{:?}", std::env::current_dir());
+    // Shader Vars
+    let vertex_code = VShaderUtils::load_shader("./sample/shaders/base.vert.spv")
+        .expect("Failed to load vertex shader code.");
+    let vertex_shader_module = VShaderUtils::create_shader_module(&device, &vertex_code)
+        .expect("Failed to create vertexshader module.");
+    let fragment_code = VShaderUtils::load_shader("./sample/shaders/base.frag.spv")
+        .expect("Failed to load fragment shader code.");
+    let fragment_shader_module = VShaderUtils::create_shader_module(&device, &fragment_code)
+        .expect("Failed to create fragment shader module.");
+
+    // Sync Vars
     let fence = VFence::new(&device, true).expect("Failed to create fence.");
     let graphics_semaphore =
         VSemaphore::new(&device).expect("Failed to create graphics semaphore.");
