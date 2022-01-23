@@ -1,5 +1,6 @@
 use crate::{device::VDevice, RendererResult};
 use ash::vk::{Framebuffer, FramebufferCreateInfo, ImageView, RenderPass};
+use std::ops::Index;
 use winit::dpi::PhysicalSize;
 
 pub struct VFramebuffers {
@@ -50,6 +51,19 @@ impl VFramebuffers {
         }
     }
 }
+
+macro_rules! impl_index_for_vframebuffers {
+    ($ty: ident) => {
+        impl Index<$ty> for VFramebuffers {
+            type Output = Framebuffer;
+            fn index(&self, index: $ty) -> &Self::Output {
+                &self.framebuffers[index as usize]
+            }
+        }
+    };
+}
+impl_index_for_vframebuffers!(usize);
+impl_index_for_vframebuffers!(u32);
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,8 @@
 use crate::{instance::VInstance, RendererResult};
-use ash::{extensions::khr::Surface, vk::SurfaceKHR};
+use ash::{
+    extensions::khr::Surface,
+    vk::{Extent2D, SurfaceKHR},
+};
 use std::sync::Arc;
 use winit::{
     dpi::PhysicalSize,
@@ -48,6 +51,11 @@ impl VSurface {
 
     pub fn dimensions(&self) -> PhysicalSize<u32> {
         self.window.inner_size()
+    }
+
+    pub fn extent_2d(&self) -> Extent2D {
+        let PhysicalSize { width, height } = self.dimensions();
+        Extent2D { width, height }
     }
 }
 

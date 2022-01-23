@@ -10,8 +10,10 @@ use crate::{
 use ash::{
     extensions::khr::Swapchain,
     vk::{
-        CommandBuffer, CommandBufferAllocateInfo, CommandBufferLevel, CommandPool,
-        DeviceCreateInfo, DeviceQueueCreateInfo, Fence, Queue, RenderPass,
+        ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
+        CommandBufferLevel, CommandBufferUsageFlags, CommandPool, DeviceCreateInfo,
+        DeviceQueueCreateInfo, Extent2D, Fence, Framebuffer, Offset2D, PipelineStageFlags, Queue,
+        Rect2D, RenderPass, RenderPassBeginInfo, Semaphore, SubmitInfo, SubpassContents,
     },
     Device,
 };
@@ -73,22 +75,98 @@ impl VDevice {
     }
 
     pub fn allocate_command_buffers(
-        device: &VDevice,
+        &self,
         command_buffer_count: u32,
         operation_type: EOperationType,
     ) -> RendererResult<Vec<CommandBuffer>> {
         let command_buffer_allocate_info = CommandBufferAllocateInfo {
             command_buffer_count,
             level: CommandBufferLevel::PRIMARY,
-            command_pool: device.get_command_pool(operation_type),
+            command_pool: self.get_command_pool(operation_type),
             ..Default::default()
         };
 
         unsafe {
-            Ok(device
+            Ok(self
                 .device
                 .allocate_command_buffers(&command_buffer_allocate_info)?)
         }
+    }
+
+    pub fn begin_command_buffer(&self, command_buffer: CommandBuffer) -> RendererResult<()> {
+        let begin_info = CommandBufferBeginInfo {
+            flags: CommandBufferUsageFlags::ONE_TIME_SUBMIT,
+            ..Default::default()
+        };
+        unsafe {
+            self.device
+                .begin_command_buffer(command_buffer, &begin_info)?
+        }
+        Ok(())
+    }
+
+    pub fn end_command_buffer(&self, command_buffer: CommandBuffer) -> RendererResult<()> {
+        unsafe { self.device.end_command_buffer(command_buffer)? };
+        Ok(())
+    }
+
+    pub fn begin_render_pass(
+        &self,
+        command_buffer: CommandBuffer,
+        framebuffer: Framebuffer,
+        clear_values: &[ClearValue],
+        extent: Extent2D,
+    ) {
+        let render_pass_begin_info = RenderPassBeginInfo {
+            clear_value_count: clear_values.len() as u32,
+            p_clear_values: clear_values.as_ptr(),
+            render_pass: self.render_pass(),
+            framebuffer,
+            render_area: Rect2D {
+                offset: Offset2D { x: 0, y: 0 },
+                extent,
+            },
+            ..Default::default()
+        };
+        unsafe {
+            self.device.cmd_begin_render_pass(
+                command_buffer,
+                &render_pass_begin_info,
+                SubpassContents::INLINE,
+            )
+        }
+    }
+
+    pub fn create_queue_submit_info(
+        command_buffers: &[CommandBuffer],
+        wait_semaphores: &[Semaphore],
+        dst_semaphores: &[Semaphore],
+        pipeline_stage_flags: &[PipelineStageFlags],
+    ) -> SubmitInfo {
+        SubmitInfo {
+            command_buffer_count: command_buffers.len() as u32,
+            p_command_buffers: command_buffers.as_ptr(),
+            wait_semaphore_count: wait_semaphores.len() as u32,
+            p_wait_semaphores: wait_semaphores.as_ptr(),
+            signal_semaphore_count: dst_semaphores.len() as u32,
+            p_signal_semaphores: dst_semaphores.as_ptr(),
+            p_wait_dst_stage_mask: pipeline_stage_flags.as_ptr(),
+            ..Default::default()
+        }
+    }
+
+    pub fn queue_submit(
+        &self,
+        queue: Queue,
+        submits: &[SubmitInfo],
+        fence: Fence,
+    ) -> RendererResult<()> {
+        unsafe { self.device.queue_submit(queue, submits, fence)? }
+        Ok(())
+    }
+
+    pub fn end_render_pass(&self, command_buffer: CommandBuffer) {
+        unsafe { self.device.cmd_end_render_pass(command_buffer) }
     }
 
     pub fn wait_for_fences(&self, fences: &[Fence], timeout: u64) -> RendererResult<()> {

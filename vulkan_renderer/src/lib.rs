@@ -12,3 +12,4 @@ pub mod sync;
 
 pub(crate) type RendererError = Box<dyn std::error::Error>;
 pub(crate) type RendererResult<T> = Result<T, RendererError>;
+pub use ash::vk::{ClearColorValue, ClearValue, PipelineStageFlags};

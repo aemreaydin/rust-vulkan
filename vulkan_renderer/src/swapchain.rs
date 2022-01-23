@@ -5,9 +5,10 @@ use crate::{
 use ash::{
     extensions::khr::Swapchain,
     vk::{
-        ComponentMapping, ComponentSwizzle, CompositeAlphaFlagsKHR, Extent2D, Format, Image,
+        ComponentMapping, ComponentSwizzle, CompositeAlphaFlagsKHR, Fence, Format, Handle, Image,
         ImageAspectFlags, ImageSubresourceRange, ImageUsageFlags, ImageView, ImageViewCreateInfo,
-        ImageViewType, SharingMode, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
+        ImageViewType, PresentInfoKHR, Queue, Semaphore, SharingMode, SurfaceTransformFlagsKHR,
+        SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
 use std::sync::Arc;
@@ -60,6 +61,41 @@ impl VSwapchain {
         &self.image_views
     }
 
+    pub fn acquire_next_image(
+        &self,
+        timeout: u64,
+        semaphore: Option<Semaphore>,
+        fence: Option<Fence>,
+    ) -> RendererResult<(u32, bool)> {
+        let fence = fence.unwrap_or_else(|| Fence::from_raw(0));
+        let semaphore = semaphore.unwrap_or_else(|| Semaphore::from_raw(0));
+        let next_image = unsafe {
+            self.swapchain
+                .acquire_next_image(self.swapchain_khr, timeout, semaphore, fence)?
+        };
+        Ok(next_image)
+    }
+
+    pub fn create_present_info(
+        image_indices: &[u32],
+        swapchains: &[SwapchainKHR],
+        wait_semaphores: &[Semaphore],
+    ) -> PresentInfoKHR {
+        PresentInfoKHR {
+            p_image_indices: image_indices.as_ptr(),
+            wait_semaphore_count: wait_semaphores.len() as u32,
+            p_wait_semaphores: wait_semaphores.as_ptr(),
+            swapchain_count: swapchains.len() as u32,
+            p_swapchains: swapchains.as_ptr(),
+            ..Default::default()
+        }
+    }
+
+    pub fn queue_present(&self, queue: Queue, present_info: PresentInfoKHR) -> RendererResult<()> {
+        unsafe { self.swapchain.queue_present(queue, &present_info)? };
+        Ok(())
+    }
+
     fn create_image_views(
         physical_device: &VPhysicalDevice,
         device: &VDevice,
@@ -98,10 +134,7 @@ impl VSwapchain {
         let image_format = phys_dev_info.choose_surface_format().format;
         let image_color_space = phys_dev_info.choose_surface_format().color_space;
         let present_mode = phys_dev_info.choose_present_mode();
-        let image_extent = Extent2D {
-            width: surface.dimensions().width,
-            height: surface.dimensions().height,
-        };
+        let image_extent = surface.extent_2d();
         let image_usage = ImageUsageFlags::COLOR_ATTACHMENT;
         let sharing_mode = SharingMode::EXCLUSIVE;
         let pre_transform = if phys_dev_info

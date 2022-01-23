@@ -15,7 +15,8 @@ pub struct VRenderPass {
 impl VRenderPass {
     pub fn new(device: &Device, format: Format) -> RendererResult<Self> {
         let attachments = Self::attachment_descriptions(format);
-        let subpass_descriptions = Self::subpass_dependencies();
+        let attachment_refs = Self::attachment_refs();
+        let subpass_descriptions = Self::subpass_descriptions(&attachment_refs);
         let create_info = Self::render_pass_create_info(&attachments, &subpass_descriptions);
 
         let render_pass = unsafe { device.create_render_pass(&create_info, None)? };
@@ -39,12 +40,9 @@ impl VRenderPass {
         }
     }
 
-    fn subpass_dependencies() -> Vec<SubpassDescription> {
-        let attachment_reference = AttachmentReference {
-            attachment: 0,
-            layout: ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        };
-        let color_attachment_refs = vec![attachment_reference];
+    fn subpass_descriptions(
+        color_attachment_refs: &[AttachmentReference],
+    ) -> Vec<SubpassDescription> {
         let subpass_description = SubpassDescription {
             pipeline_bind_point: PipelineBindPoint::GRAPHICS,
             color_attachment_count: color_attachment_refs.len() as u32,
@@ -52,6 +50,14 @@ impl VRenderPass {
             ..Default::default()
         };
         vec![subpass_description]
+    }
+
+    fn attachment_refs() -> Vec<AttachmentReference> {
+        let attachment_reference = AttachmentReference {
+            attachment: 0,
+            layout: ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        };
+        vec![attachment_reference]
     }
 
     fn attachment_descriptions(format: Format) -> Vec<AttachmentDescription> {
