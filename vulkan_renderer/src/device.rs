@@ -18,11 +18,11 @@ use ash::{
     },
     Device,
 };
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 /// Keeps tracks of the logical device, queues, command_pools and the render_pass
 pub struct VDevice {
-    device: Arc<Device>,
+    device: Device,
     queues: VQueues,
     command_pools: VCommandPools,
     render_pass: VRenderPass,
@@ -51,7 +51,7 @@ impl VDevice {
         )?;
 
         Ok(Self {
-            device: Arc::new(device),
+            device,
             queues,
             command_pools,
             render_pass,
@@ -61,8 +61,8 @@ impl VDevice {
         })
     }
 
-    pub fn get(&self) -> Arc<Device> {
-        self.device.clone()
+    pub fn get(&self) -> &Device {
+        &self.device
     }
 
     pub fn get_queue(&self, operation_type: EOperationType) -> Queue {

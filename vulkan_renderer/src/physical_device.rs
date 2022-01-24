@@ -121,10 +121,10 @@ pub struct VPhysicalDevice {
 impl VPhysicalDevice {
     pub fn new(instance: &VInstance, surface: &VSurface) -> RendererResult<Self> {
         let physical_device =
-            Self::find_optimal_device(&instance.get(), surface.surface(), surface.surface_khr())?;
+            Self::find_optimal_device(instance.get(), surface.surface(), surface.surface_khr())?;
 
         let physical_device_information = VPhysicalDeviceInformation::generate(
-            &instance.get(),
+            instance.get(),
             surface.surface(),
             surface.surface_khr(),
             physical_device,

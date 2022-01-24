@@ -3,7 +3,6 @@ use ash::{
     extensions::khr::Surface,
     vk::{Extent2D, SurfaceKHR},
 };
-use std::sync::Arc;
 use winit::{
     dpi::PhysicalSize,
     event_loop::EventLoop,
@@ -11,9 +10,9 @@ use winit::{
 };
 
 pub struct VSurface {
-    surface: Arc<Surface>,
+    surface: Surface,
     surface_khr: SurfaceKHR,
-    window: Arc<Window>,
+    window: Window,
 }
 
 impl VSurface {
@@ -26,14 +25,14 @@ impl VSurface {
             .with_inner_size(PhysicalSize::new(1920, 1080))
             .build(event_loop)?;
 
-        let surface = Surface::new(&entry, &instance.get());
+        let surface = Surface::new(&entry, instance.get());
         let surface_khr =
-            unsafe { ash_window::create_surface(&entry, &instance.get(), &window, None)? };
+            unsafe { ash_window::create_surface(&entry, instance.get(), &window, None)? };
 
         Ok(Self {
-            surface: Arc::new(surface),
+            surface,
             surface_khr,
-            window: Arc::new(window),
+            window,
         })
     }
 

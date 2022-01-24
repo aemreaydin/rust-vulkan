@@ -11,10 +11,8 @@ use ash::{
         SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
-use std::sync::Arc;
-
 pub struct VSwapchain {
-    swapchain: Arc<Swapchain>,
+    swapchain: Swapchain,
     swapchain_khr: SwapchainKHR,
     images: Vec<Image>,
     image_views: Vec<ImageView>,
@@ -27,14 +25,14 @@ impl VSwapchain {
         device: &VDevice,
         surface: &VSurface,
     ) -> RendererResult<Self> {
-        let swapchain = Swapchain::new(&instance.get(), &device.get());
+        let swapchain = Swapchain::new(instance.get(), device.get());
         let create_info = Self::swapchain_create_info(physical_device, surface);
         let swapchain_khr = unsafe { swapchain.create_swapchain(&create_info, None) }?;
         let images = unsafe { swapchain.get_swapchain_images(swapchain_khr)? };
         let image_views = Self::create_image_views(physical_device, device, &images)?;
 
         Ok(Self {
-            swapchain: Arc::new(swapchain),
+            swapchain,
             swapchain_khr,
             images,
             image_views,

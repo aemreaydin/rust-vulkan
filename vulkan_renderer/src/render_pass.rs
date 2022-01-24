@@ -98,7 +98,7 @@ mod tests {
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
             let device = VDevice::new(&instance, &physical_device)?;
             let render_pass = VRenderPass::new(
-                &device.get(),
+                device.get(),
                 physical_device
                     .physical_device_information()
                     .choose_surface_format()

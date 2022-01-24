@@ -63,7 +63,7 @@ mod tests {
             let device = VDevice::new(&instance, &physical_device)?;
 
             let command_pools =
-                VCommandPools::new(&device.get(), physical_device.queue_family_indices())?;
+                VCommandPools::new(device.get(), physical_device.queue_family_indices())?;
             assert_ne!(command_pools.get(EOperationType::Compute).as_raw(), 0);
             assert_ne!(command_pools.get(EOperationType::Graphics).as_raw(), 0);
             assert_ne!(command_pools.get(EOperationType::Present).as_raw(), 0);

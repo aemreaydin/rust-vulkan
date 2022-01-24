@@ -1,5 +1,6 @@
 use std::mem::{align_of, size_of};
 
+use crate::{device::VDevice, impl_get, RendererResult};
 use ash::{
     util::Align,
     vk::{
@@ -8,8 +9,6 @@ use ash::{
         SharingMode,
     },
 };
-
-use crate::{device::VDevice, impl_get, RendererResult};
 
 #[derive(Clone, Copy, Default)]
 pub struct VBuffer {
