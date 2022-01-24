@@ -17,10 +17,10 @@ use vulkan_renderer::{
         vertex::Vertex,
     },
     shader_utils::VShaderUtils,
+    slice_utils::U8Slice,
     surface::VSurface,
     swapchain::VSwapchain,
     sync::{VFence, VSemaphore},
-    utils::U8Slice,
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},

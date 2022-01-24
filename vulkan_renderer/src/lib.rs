@@ -11,10 +11,10 @@ pub mod primitives;
 pub mod queue_family;
 pub mod render_pass;
 pub mod shader_utils;
+pub mod slice_utils;
 pub mod surface;
 pub mod swapchain;
 pub mod sync;
-pub mod utils;
 
 pub use glam;
 pub(crate) type RendererError = Box<dyn std::error::Error>;
