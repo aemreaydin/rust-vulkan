@@ -1,14 +1,18 @@
+use ash::vk::{
+    ClearColorValue, ClearValue, ColorComponentFlags, PipelineBindPoint,
+    PipelineColorBlendAttachmentState, PipelineStageFlags, Rect2D, ShaderStageFlags, Viewport,
+};
 use vulkan_renderer::{
     device::VDevice,
     enums::EOperationType,
     framebuffer::VFramebuffers,
     instance::VInstance,
     physical_device::VPhysicalDevice,
+    pipeline::VGraphicsPipelineBuilder,
     shader_utils::VShaderUtils,
     surface::VSurface,
     swapchain::VSwapchain,
     sync::{VFence, VSemaphore},
-    ClearColorValue, ClearValue, PipelineStageFlags,
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -32,16 +36,45 @@ fn main() {
         .allocate_command_buffers(1, EOperationType::Graphics)
         .expect("Failed to allocate command buffers.")[0];
 
-    println!("{:?}", std::env::current_dir());
     // Shader Vars
     let vertex_code = VShaderUtils::load_shader("./sample/shaders/base.vert.spv")
         .expect("Failed to load vertex shader code.");
     let vertex_shader_module = VShaderUtils::create_shader_module(&device, &vertex_code)
-        .expect("Failed to create vertexshader module.");
+        .expect("Failed to create vertex shader module.");
     let fragment_code = VShaderUtils::load_shader("./sample/shaders/base.frag.spv")
         .expect("Failed to load fragment shader code.");
     let fragment_shader_module = VShaderUtils::create_shader_module(&device, &fragment_code)
         .expect("Failed to create fragment shader module.");
+
+    // Graphics Pipeline
+    let builder = VGraphicsPipelineBuilder::start();
+    let shader_infos = &[
+        (ShaderStageFlags::VERTEX, vertex_shader_module),
+        (ShaderStageFlags::FRAGMENT, fragment_shader_module),
+    ];
+    let viewports = &[Viewport {
+        x: 0.0,
+        y: 0.0,
+        max_depth: 1.0,
+        min_depth: 0.0,
+        height: surface.extent_2d().height as f32,
+        width: surface.extent_2d().width as f32,
+    }];
+    let scissors = &[Rect2D {
+        extent: surface.extent_2d(),
+        ..Default::default()
+    }];
+    let color_blend_attachments = &[PipelineColorBlendAttachmentState {
+        color_write_mask: ColorComponentFlags::RGBA,
+        ..Default::default()
+    }];
+    let builder = builder
+        .shader_stages(shader_infos)
+        .viewport(viewports, scissors)
+        .color_blend_state(color_blend_attachments);
+    let pipeline = builder
+        .build(&device)
+        .expect("Failed to create graphics pipeline.");
 
     // Sync Vars
     let fence = VFence::new(&device, true).expect("Failed to create fence.");
@@ -81,6 +114,10 @@ fn main() {
             clear_values,
             surface.extent_2d(),
         );
+
+        device.bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, pipeline);
+        device.draw(command_buffer, 3, 1);
+
         device.end_render_pass(command_buffer);
         device
             .end_command_buffer(command_buffer)

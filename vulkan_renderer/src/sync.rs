@@ -63,7 +63,7 @@ mod tests {
     use super::{VFence, VSemaphore};
 
     #[test]
-    fn creates_swapchain() -> RendererResult<()> {
+    fn creates_syncs() -> RendererResult<()> {
         let instance = VInstance::new("Test", 0)?;
 
         #[cfg(target_os = "windows")]

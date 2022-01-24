@@ -12,8 +12,9 @@ use ash::{
     vk::{
         ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
         CommandBufferLevel, CommandBufferUsageFlags, CommandPool, DeviceCreateInfo,
-        DeviceQueueCreateInfo, Extent2D, Fence, Framebuffer, Offset2D, PipelineStageFlags, Queue,
-        Rect2D, RenderPass, RenderPassBeginInfo, Semaphore, SubmitInfo, SubpassContents,
+        DeviceQueueCreateInfo, Extent2D, Fence, Framebuffer, Offset2D, Pipeline, PipelineBindPoint,
+        PipelineStageFlags, Queue, Rect2D, RenderPass, RenderPassBeginInfo, Semaphore, SubmitInfo,
+        SubpassContents,
     },
     Device,
 };
@@ -132,6 +133,25 @@ impl VDevice {
                 &render_pass_begin_info,
                 SubpassContents::INLINE,
             )
+        }
+    }
+
+    pub fn bind_pipeline(
+        &self,
+        command_buffer: CommandBuffer,
+        bind_point: PipelineBindPoint,
+        pipeline: Pipeline,
+    ) {
+        unsafe {
+            self.device
+                .cmd_bind_pipeline(command_buffer, bind_point, pipeline)
+        };
+    }
+
+    pub fn draw(&self, command_buffer: CommandBuffer, vertex_count: u32, instance_count: u32) {
+        unsafe {
+            self.device
+                .cmd_draw(command_buffer, vertex_count, instance_count, 0, 0);
         }
     }
 

@@ -75,7 +75,7 @@ mod tests {
     use winit::platform::windows::EventLoopExtWindows;
 
     #[test]
-    fn creates_swapchain() -> RendererResult<()> {
+    fn creates_framebuffer() -> RendererResult<()> {
         let instance = VInstance::new("Test", 0)?;
 
         #[cfg(target_os = "windows")]
