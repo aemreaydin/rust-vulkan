@@ -2,9 +2,9 @@ use crate::{
     instance::VInstance, queue_family::VQueueFamilyIndices, surface::VSurface, RendererResult,
 };
 use ash::vk::{
-    ColorSpaceKHR, Format, PhysicalDevice, PhysicalDeviceProperties, PhysicalDeviceType,
-    PresentModeKHR, QueueFamilyProperties, QueueFlags, SurfaceCapabilitiesKHR, SurfaceFormatKHR,
-    SurfaceKHR,
+    ColorSpaceKHR, Format, PhysicalDevice, PhysicalDeviceMemoryProperties,
+    PhysicalDeviceProperties, PhysicalDeviceType, PresentModeKHR, QueueFamilyProperties,
+    QueueFlags, SurfaceCapabilitiesKHR, SurfaceFormatKHR, SurfaceKHR,
 };
 use ash::{extensions::khr::Surface, Instance};
 use thiserror::Error;
@@ -18,6 +18,7 @@ enum PhysicalDeviceError {
 }
 
 pub struct VPhysicalDeviceInformation {
+    pub memory_properties: PhysicalDeviceMemoryProperties,
     pub properties: PhysicalDeviceProperties,
     // pub features: PhysicalDeviceFeatures,
     pub queue_family_properties: Vec<QueueFamilyProperties>,
@@ -36,6 +37,8 @@ impl VPhysicalDeviceInformation {
         surface_khr: SurfaceKHR,
         physical_device: PhysicalDevice,
     ) -> RendererResult<Self> {
+        let memory_properties =
+            unsafe { instance.get_physical_device_memory_properties(physical_device) };
         let properties = unsafe { instance.get_physical_device_properties(physical_device) };
         let _features = unsafe { instance.get_physical_device_features(physical_device) };
         let queue_family_properties =
@@ -48,7 +51,9 @@ impl VPhysicalDeviceInformation {
         let surface_present_modes = unsafe {
             surface.get_physical_device_surface_present_modes(physical_device, surface_khr)?
         };
+
         Ok(Self {
+            memory_properties,
             properties,
             // features,
             queue_family_properties,

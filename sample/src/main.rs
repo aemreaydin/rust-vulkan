@@ -6,9 +6,11 @@ use vulkan_renderer::{
     device::VDevice,
     enums::EOperationType,
     framebuffer::VFramebuffers,
+    glm::Vec4,
     instance::VInstance,
     physical_device::VPhysicalDevice,
     pipeline::VGraphicsPipelineBuilder,
+    primitives::{mesh::Mesh, vertex::Vertex},
     shader_utils::VShaderUtils,
     surface::VSurface,
     swapchain::VSwapchain,
@@ -68,8 +70,10 @@ fn main() {
         color_write_mask: ColorComponentFlags::RGBA,
         ..Default::default()
     }];
+    let vertex_input_desc = Vertex::vertex_description();
     let builder = builder
         .shader_stages(shader_infos)
+        .vertex_input(&vertex_input_desc.bindings, &vertex_input_desc.attributes)
         .viewport(viewports, scissors)
         .color_blend_state(color_blend_attachments);
     let pipeline = builder
@@ -81,6 +85,28 @@ fn main() {
     let graphics_semaphore =
         VSemaphore::new(&device).expect("Failed to create graphics semaphore.");
     let present_semaphore = VSemaphore::new(&device).expect("Failed to create present semaphore.");
+
+    let triangle_mesh = Mesh::new(
+        &device,
+        vec![
+            Vertex::new(
+                Vec4::new(1.0, 1.0, 0.0, 1.0),
+                Vec4::new(0.0, 1.0, 0.0, 1.0),
+                Vec4::default(),
+            ),
+            Vertex::new(
+                Vec4::new(-1.0, 1.0, 0.0, 1.0),
+                Vec4::new(1.0, 0.0, 0.0, 1.0),
+                Vec4::default(),
+            ),
+            Vertex::new(
+                Vec4::new(0.0, -1.0, 0.0, 1.0),
+                Vec4::new(0.0, 0.0, 1.0, 1.0),
+                Vec4::default(),
+            ),
+        ],
+        vec![0, 1, 2],
+    );
 
     let mut frame_count = 0;
     event_loop.run(move |event, _, control_flow| {
@@ -116,7 +142,13 @@ fn main() {
         );
 
         device.bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, pipeline);
-        device.draw(command_buffer, 3, 1);
+        device.bind_vertex_buffer(
+            command_buffer,
+            &[triangle_mesh.vertex_buffer().buffer()],
+            &[0],
+        );
+        device.bind_index_buffer(command_buffer, triangle_mesh.index_buffer().buffer(), 0);
+        device.draw_indexed(command_buffer, triangle_mesh.indices().len() as u32, 1);
 
         device.end_render_pass(command_buffer);
         device

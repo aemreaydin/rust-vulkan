@@ -10,11 +10,11 @@ use crate::{
 use ash::{
     extensions::khr::Swapchain,
     vk::{
-        ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
+        Buffer, ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
         CommandBufferLevel, CommandBufferUsageFlags, CommandPool, DeviceCreateInfo,
-        DeviceQueueCreateInfo, Extent2D, Fence, Framebuffer, Offset2D, Pipeline, PipelineBindPoint,
-        PipelineStageFlags, Queue, Rect2D, RenderPass, RenderPassBeginInfo, Semaphore, SubmitInfo,
-        SubpassContents,
+        DeviceQueueCreateInfo, DeviceSize, Extent2D, Fence, Framebuffer, IndexType, Offset2D,
+        PhysicalDeviceMemoryProperties, Pipeline, PipelineBindPoint, PipelineStageFlags, Queue,
+        Rect2D, RenderPass, RenderPassBeginInfo, Semaphore, SubmitInfo, SubpassContents,
     },
     Device,
 };
@@ -26,6 +26,7 @@ pub struct VDevice {
     queues: VQueues,
     command_pools: VCommandPools,
     render_pass: VRenderPass,
+    memory_properties: PhysicalDeviceMemoryProperties,
 }
 
 impl VDevice {
@@ -54,6 +55,9 @@ impl VDevice {
             queues,
             command_pools,
             render_pass,
+            memory_properties: physical_device
+                .physical_device_information()
+                .memory_properties,
         })
     }
 
@@ -71,6 +75,10 @@ impl VDevice {
 
     pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {
         self.command_pools.get(operation_type)
+    }
+
+    pub fn memory_properties(&self) -> PhysicalDeviceMemoryProperties {
+        self.memory_properties
     }
 
     pub fn allocate_command_buffers(
@@ -132,7 +140,7 @@ impl VDevice {
                 command_buffer,
                 &render_pass_begin_info,
                 SubpassContents::INLINE,
-            )
+            );
         }
     }
 
@@ -144,14 +152,50 @@ impl VDevice {
     ) {
         unsafe {
             self.device
-                .cmd_bind_pipeline(command_buffer, bind_point, pipeline)
+                .cmd_bind_pipeline(command_buffer, bind_point, pipeline);
         };
+    }
+
+    pub fn bind_vertex_buffer(
+        &self,
+        command_buffer: CommandBuffer,
+        buffers: &[Buffer],
+        offsets: &[DeviceSize],
+    ) {
+        unsafe {
+            self.device
+                .cmd_bind_vertex_buffers(command_buffer, 0, buffers, offsets);
+        }
+    }
+
+    pub fn bind_index_buffer(
+        &self,
+        command_buffer: CommandBuffer,
+        buffer: Buffer,
+        offset: DeviceSize,
+    ) {
+        unsafe {
+            self.device
+                .cmd_bind_index_buffer(command_buffer, buffer, offset, IndexType::UINT32);
+        }
     }
 
     pub fn draw(&self, command_buffer: CommandBuffer, vertex_count: u32, instance_count: u32) {
         unsafe {
             self.device
                 .cmd_draw(command_buffer, vertex_count, instance_count, 0, 0);
+        }
+    }
+
+    pub fn draw_indexed(
+        &self,
+        command_buffer: CommandBuffer,
+        index_count: u32,
+        instance_count: u32,
+    ) {
+        unsafe {
+            self.device
+                .cmd_draw_indexed(command_buffer, index_count, instance_count, 0, 0, 0);
         }
     }
 
