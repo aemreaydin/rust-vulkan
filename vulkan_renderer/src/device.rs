@@ -13,8 +13,9 @@ use ash::{
         Buffer, ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
         CommandBufferLevel, CommandBufferUsageFlags, CommandPool, DeviceCreateInfo,
         DeviceQueueCreateInfo, DeviceSize, Extent2D, Fence, Framebuffer, IndexType, Offset2D,
-        PhysicalDeviceMemoryProperties, Pipeline, PipelineBindPoint, PipelineStageFlags, Queue,
-        Rect2D, RenderPass, RenderPassBeginInfo, Semaphore, SubmitInfo, SubpassContents,
+        PhysicalDeviceMemoryProperties, Pipeline, PipelineBindPoint, PipelineLayout,
+        PipelineStageFlags, Queue, Rect2D, RenderPass, RenderPassBeginInfo, Semaphore,
+        ShaderStageFlags, SubmitInfo, SubpassContents,
     },
     Device,
 };
@@ -177,6 +178,19 @@ impl VDevice {
         unsafe {
             self.device
                 .cmd_bind_index_buffer(command_buffer, buffer, offset, IndexType::UINT32);
+        }
+    }
+
+    pub fn push_constants(
+        &self,
+        command_buffer: CommandBuffer,
+        layout: PipelineLayout,
+        stage_flags: ShaderStageFlags,
+        constants: &[u8],
+    ) {
+        unsafe {
+            self.device
+                .cmd_push_constants(command_buffer, layout, stage_flags, 0, constants);
         }
     }
 

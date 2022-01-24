@@ -7,5 +7,6 @@ version = "0.1.0"
 
 [dependencies]
 ash = "0.35.1"
+glam = "0.20.2"
 vulkan_renderer = {path = "../vulkan_renderer"}
 winit = "0.26.1"

@@ -1,4 +1,4 @@
-use crate::{device::VDevice, RendererResult};
+use crate::{device::VDevice, impl_get, RendererResult};
 use ash::vk::{
     CullModeFlags, DescriptorSetLayout, FrontFace, GraphicsPipelineCreateInfo, LogicOp, Pipeline,
     PipelineCache, PipelineColorBlendAttachmentState, PipelineColorBlendStateCreateInfo,
@@ -11,9 +11,14 @@ use ash::vk::{
 };
 use std::ffi::CStr;
 
-pub struct VGraphicsPipeline {}
+#[derive(Debug, Clone, Copy, Default)]
+pub struct VGraphicsPipeline {
+    pipeline: Pipeline,
+    pipeline_layout: PipelineLayout,
+}
 
-impl VGraphicsPipeline {}
+impl_get!(VGraphicsPipeline, pipeline, Pipeline);
+impl_get!(VGraphicsPipeline, pipeline_layout, PipelineLayout);
 
 #[derive(Default)]
 pub struct VGraphicsPipelineBuilder {
@@ -40,7 +45,7 @@ impl VGraphicsPipelineBuilder {
         }
     }
 
-    pub fn build(&self, device: &VDevice) -> RendererResult<Pipeline> {
+    pub fn build(&self, device: &VDevice) -> RendererResult<VGraphicsPipeline> {
         let pipeline_layout = unsafe {
             device
                 .get()
@@ -57,7 +62,10 @@ impl VGraphicsPipelineBuilder {
                 .create_graphics_pipelines(PipelineCache::null(), create_infos, None)
         };
         match pipelines_result {
-            Ok(pipelines) => Ok(pipelines[0]),
+            Ok(pipelines) => Ok(VGraphicsPipeline {
+                pipeline: pipelines[0],
+                pipeline_layout,
+            }),
             Err((_, err)) => Err(Box::new(err)),
         }
     }
@@ -245,13 +253,20 @@ impl VGraphicsPipelineBuilder {
 
 #[cfg(test)]
 mod tests {
+    use std::mem::size_of;
+
     use crate::{
-        device::VDevice, instance::VInstance, physical_device::VPhysicalDevice,
-        shader_utils::VShaderUtils, surface::VSurface, RendererResult,
+        device::VDevice,
+        instance::VInstance,
+        physical_device::VPhysicalDevice,
+        primitives::{mesh::MeshPushConstants, vertex::Vertex},
+        shader_utils::VShaderUtils,
+        surface::VSurface,
+        RendererResult,
     };
     use ash::vk::{
-        ColorComponentFlags, Handle, PipelineColorBlendAttachmentState, Rect2D, ShaderStageFlags,
-        Viewport,
+        ColorComponentFlags, Handle, PipelineColorBlendAttachmentState, PushConstantRange, Rect2D,
+        ShaderStageFlags, Viewport,
     };
     use winit::platform::windows::EventLoopExtWindows;
 
@@ -297,14 +312,23 @@ mod tests {
                 color_write_mask: ColorComponentFlags::RGBA,
                 ..Default::default()
             }];
+            let vertex_input_desc = Vertex::vertex_description();
+            let push_constants = &[PushConstantRange {
+                stage_flags: ShaderStageFlags::VERTEX,
+                size: size_of::<MeshPushConstants>() as u32,
+                offset: 0,
+            }];
             let builder = builder
                 .shader_stages(shader_infos)
+                .vertex_input(&vertex_input_desc.bindings, &vertex_input_desc.attributes)
                 .viewport(viewports, scissors)
-                .color_blend_state(color_blend_attachments);
+                .color_blend_state(color_blend_attachments)
+                .pipeline_layout(&[], push_constants);
             let pipeline = builder
                 .build(&device)
                 .expect("Failed to create graphics pipeline.");
-            assert_ne!(pipeline.as_raw(), 0);
+            assert_ne!(pipeline.pipeline.as_raw(), 0);
+            assert_ne!(pipeline.pipeline_layout.as_raw(), 0);
         }
         Ok(())
     }

@@ -1,6 +1,7 @@
 use super::vertex::Vertex;
 use crate::{buffer::VBuffer, device::VDevice, impl_get, impl_get_ref};
 use ash::vk::BufferUsageFlags;
+use glam::Mat4;
 
 pub type Index = u32;
 
@@ -34,3 +35,8 @@ impl_get_ref!(Mesh, vertices, &[Vertex]);
 impl_get_ref!(Mesh, indices, &[Index]);
 impl_get!(Mesh, vertex_buffer, VBuffer);
 impl_get!(Mesh, index_buffer, VBuffer);
+
+// TODO Temp
+pub struct MeshPushConstants {
+    pub mvp: Mat4,
+}

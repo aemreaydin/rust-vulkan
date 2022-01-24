@@ -2,8 +2,8 @@ use crate::impl_get;
 use ash::vk::{
     Format, VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate,
 };
+use glam::Vec4;
 use memoffset::offset_of;
-use nalgebra_glm::Vec4;
 use std::mem::size_of;
 
 #[derive(Debug, Default, Copy, Clone)]

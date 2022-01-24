@@ -1,20 +1,26 @@
 use ash::vk::{
     ClearColorValue, ClearValue, ColorComponentFlags, PipelineBindPoint,
-    PipelineColorBlendAttachmentState, PipelineStageFlags, Rect2D, ShaderStageFlags, Viewport,
+    PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
+    ShaderStageFlags, Viewport,
 };
+use glam::{Mat4, Vec3, Vec4};
+use std::mem::size_of;
 use vulkan_renderer::{
     device::VDevice,
     enums::EOperationType,
     framebuffer::VFramebuffers,
-    glm::Vec4,
     instance::VInstance,
     physical_device::VPhysicalDevice,
     pipeline::VGraphicsPipelineBuilder,
-    primitives::{mesh::Mesh, vertex::Vertex},
+    primitives::{
+        mesh::{Mesh, MeshPushConstants},
+        vertex::Vertex,
+    },
     shader_utils::VShaderUtils,
     surface::VSurface,
     swapchain::VSwapchain,
     sync::{VFence, VSemaphore},
+    utils::U8Slice,
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -71,11 +77,17 @@ fn main() {
         ..Default::default()
     }];
     let vertex_input_desc = Vertex::vertex_description();
+    let push_constants = &[PushConstantRange {
+        stage_flags: ShaderStageFlags::VERTEX,
+        size: size_of::<MeshPushConstants>() as u32,
+        offset: 0,
+    }];
     let builder = builder
         .shader_stages(shader_infos)
         .vertex_input(&vertex_input_desc.bindings, &vertex_input_desc.attributes)
         .viewport(viewports, scissors)
-        .color_blend_state(color_blend_attachments);
+        .color_blend_state(color_blend_attachments)
+        .pipeline_layout(&[], push_constants);
     let pipeline = builder
         .build(&device)
         .expect("Failed to create graphics pipeline.");
@@ -141,13 +153,36 @@ fn main() {
             surface.extent_2d(),
         );
 
-        device.bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, pipeline);
+        device.bind_pipeline(
+            command_buffer,
+            PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline(),
+        );
         device.bind_vertex_buffer(
             command_buffer,
             &[triangle_mesh.vertex_buffer().buffer()],
             &[0],
         );
         device.bind_index_buffer(command_buffer, triangle_mesh.index_buffer().buffer(), 0);
+
+        // Camera and Model
+        let camera = Vec3::new(0.0, 0.0, -2.0);
+        let mut view = Mat4::look_at_rh(camera, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+        view.col_mut(1)[1] *= -1.0;
+        let projection = Mat4::perspective_rh(70.0f32.to_radians(), 1920.0 / 1080.0, 0.1, 100.0);
+        let model = Mat4::from_rotation_y(frame_count as f32 * 0.0002);
+
+        let constants = MeshPushConstants {
+            mvp: projection * view * model,
+        };
+
+        device.push_constants(
+            command_buffer,
+            pipeline.pipeline_layout(),
+            ShaderStageFlags::VERTEX,
+            constants.as_u8_slice(),
+        );
+
         device.draw_indexed(command_buffer, triangle_mesh.indices().len() as u32, 1);
 
         device.end_render_pass(command_buffer);
