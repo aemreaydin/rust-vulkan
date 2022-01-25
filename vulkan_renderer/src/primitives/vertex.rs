@@ -2,15 +2,15 @@ use crate::impl_get;
 use ash::vk::{
     Format, VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate,
 };
-use glam::Vec4;
+use glam::{Vec2, Vec3};
 use memoffset::offset_of;
 use std::mem::size_of;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Vertex {
-    position: Vec4,
-    color: Vec4,
-    normal: Vec4,
+    position: Vec3,
+    normal: Vec3,
+    uv: Vec2,
 }
 
 pub struct VVertexInputDescription {
@@ -19,11 +19,11 @@ pub struct VVertexInputDescription {
 }
 
 impl Vertex {
-    pub fn new(position: Vec4, color: Vec4, normal: Vec4) -> Self {
+    pub fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self {
         Self {
             position,
-            color,
             normal,
+            uv,
         }
     }
 
@@ -37,29 +37,29 @@ impl Vertex {
         let position_attribute_desc = VertexInputAttributeDescription {
             binding: 0,
             location: 0,
-            format: Format::R32G32B32A32_SFLOAT,
+            format: Format::R32G32B32_SFLOAT,
             offset: offset_of!(Vertex, position) as u32,
-        };
-
-        let color_attribute_desc = VertexInputAttributeDescription {
-            binding: 0,
-            location: 1,
-            format: Format::R32G32B32A32_SFLOAT,
-            offset: offset_of!(Vertex, color) as u32,
         };
 
         let normal_attribute_desc = VertexInputAttributeDescription {
             binding: 0,
-            location: 2,
-            format: Format::R32G32B32A32_SFLOAT,
+            location: 1,
+            format: Format::R32G32B32_SFLOAT,
             offset: offset_of!(Vertex, normal) as u32,
+        };
+
+        let uv_attribute_desc = VertexInputAttributeDescription {
+            binding: 0,
+            location: 2,
+            format: Format::R32G32_SFLOAT,
+            offset: offset_of!(Vertex, uv) as u32,
         };
 
         let bindings = vec![binding_desc];
         let attributes = vec![
             position_attribute_desc,
-            color_attribute_desc,
             normal_attribute_desc,
+            uv_attribute_desc,
         ];
         VVertexInputDescription {
             attributes,
@@ -68,6 +68,6 @@ impl Vertex {
     }
 }
 
-impl_get!(Vertex, position, Vec4);
-impl_get!(Vertex, color, Vec4);
-impl_get!(Vertex, normal, Vec4);
+impl_get!(Vertex, position, Vec3);
+impl_get!(Vertex, normal, Vec3);
+impl_get!(Vertex, uv, Vec2);

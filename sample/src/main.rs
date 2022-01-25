@@ -1,14 +1,15 @@
 use ash::vk::{
-    ClearColorValue, ClearValue, ColorComponentFlags, PipelineBindPoint,
-    PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
-    ShaderStageFlags, Viewport,
+    ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags, Extent3D, Format,
+    ImageAspectFlags, ImageUsageFlags, PipelineBindPoint, PipelineColorBlendAttachmentState,
+    PipelineStageFlags, PushConstantRange, Rect2D, ShaderStageFlags, Viewport,
 };
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec3};
 use std::mem::size_of;
 use vulkan_renderer::{
     device::VDevice,
     enums::EOperationType,
     framebuffer::VFramebuffers,
+    image::VImage,
     instance::VInstance,
     physical_device::VPhysicalDevice,
     pipeline::VGraphicsPipelineBuilder,
@@ -37,23 +38,43 @@ fn main() {
     let device = VDevice::new(&instance, &physical_device).expect("Failed to create device.");
     let swapchain = VSwapchain::new(&instance, &physical_device, &device, &surface)
         .expect("Failed to create swapchain.");
-    let framebuffers =
-        VFramebuffers::new(&device, swapchain.get_image_views(), surface.dimensions())
-            .expect("Failed to create framebuffers.");
-    let command_buffer = device
-        .allocate_command_buffers(1, EOperationType::Graphics)
-        .expect("Failed to allocate command buffers.")[0];
 
     // Shader Vars
-    let vertex_code = VShaderUtils::load_shader("./sample/shaders/base.vert.spv")
+    let vertex_code = VShaderUtils::load_shader("sample/shaders/base.vert.spv")
         .expect("Failed to load vertex shader code.");
     let vertex_shader_module = VShaderUtils::create_shader_module(&device, &vertex_code)
         .expect("Failed to create vertex shader module.");
-    let fragment_code = VShaderUtils::load_shader("./sample/shaders/base.frag.spv")
+    let fragment_code = VShaderUtils::load_shader("sample/shaders/base.frag.spv")
         .expect("Failed to load fragment shader code.");
     let fragment_shader_module = VShaderUtils::create_shader_module(&device, &fragment_code)
         .expect("Failed to create fragment shader module.");
 
+    let depth_format = Format::D32_SFLOAT;
+    let depth_extent = Extent3D {
+        width: surface.extent_2d().width,
+        height: surface.extent_2d().height,
+        depth: 1,
+    };
+    let depth_image = VImage::new(
+        &device,
+        ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        depth_format,
+        depth_extent,
+        ImageAspectFlags::DEPTH,
+    )
+    .expect("Failed to create depth image.");
+
+    // Framebuffer and command buffer
+    let framebuffers = VFramebuffers::new(
+        &device,
+        swapchain.get_image_views(),
+        depth_image.image_view(),
+        surface.dimensions(),
+    )
+    .expect("Failed to create framebuffers.");
+    let command_buffer = device
+        .allocate_command_buffers(1, EOperationType::Graphics)
+        .expect("Failed to allocate command buffers.")[0];
     // Graphics Pipeline
     let builder = VGraphicsPipelineBuilder::start();
     let shader_infos = &[
@@ -98,27 +119,8 @@ fn main() {
         VSemaphore::new(&device).expect("Failed to create graphics semaphore.");
     let present_semaphore = VSemaphore::new(&device).expect("Failed to create present semaphore.");
 
-    let triangle_mesh = Mesh::new(
-        &device,
-        vec![
-            Vertex::new(
-                Vec4::new(1.0, 1.0, 0.0, 1.0),
-                Vec4::new(0.0, 1.0, 0.0, 1.0),
-                Vec4::default(),
-            ),
-            Vertex::new(
-                Vec4::new(-1.0, 1.0, 0.0, 1.0),
-                Vec4::new(1.0, 0.0, 0.0, 1.0),
-                Vec4::default(),
-            ),
-            Vertex::new(
-                Vec4::new(0.0, -1.0, 0.0, 1.0),
-                Vec4::new(0.0, 0.0, 1.0, 1.0),
-                Vec4::default(),
-            ),
-        ],
-        vec![0, 1, 2],
-    );
+    let box_mesh = Mesh::from_file(&device, "sample/assets/damaged_helmet/damaged_helmet.glb")
+        .expect("Failed to load mesh.");
 
     let mut frame_count = 0;
     event_loop.run(move |event, _, control_flow| {
@@ -141,11 +143,19 @@ fn main() {
             .begin_command_buffer(command_buffer)
             .expect("Failed to begin command buffer.");
 
-        let clear_values = &[ClearValue {
-            color: ClearColorValue {
-                float32: [0.0, 0.0, flash, 1.0],
+        let clear_values = &[
+            ClearValue {
+                color: ClearColorValue {
+                    float32: [0.0, 0.0, flash, 1.0],
+                },
             },
-        }];
+            ClearValue {
+                depth_stencil: ClearDepthStencilValue {
+                    depth: 1.0,
+                    ..Default::default()
+                },
+            },
+        ];
         device.begin_render_pass(
             command_buffer,
             framebuffers[image_ind],
@@ -158,12 +168,8 @@ fn main() {
             PipelineBindPoint::GRAPHICS,
             pipeline.pipeline(),
         );
-        device.bind_vertex_buffer(
-            command_buffer,
-            &[triangle_mesh.vertex_buffer().buffer()],
-            &[0],
-        );
-        device.bind_index_buffer(command_buffer, triangle_mesh.index_buffer().buffer(), 0);
+        device.bind_vertex_buffer(command_buffer, &[box_mesh.vertex_buffer().buffer()], &[0]);
+        device.bind_index_buffer(command_buffer, box_mesh.index_buffer().buffer(), 0);
 
         // Camera and Model
         let camera = Vec3::new(0.0, 0.0, -2.0);
@@ -183,7 +189,8 @@ fn main() {
             constants.as_u8_slice(),
         );
 
-        device.draw_indexed(command_buffer, triangle_mesh.indices().len() as u32, 1);
+        device.draw_indexed(command_buffer, box_mesh.indices().len() as u32, 1);
+        // device.draw(command_buffer, box_mesh.vertices().len() as u32, 1);
 
         device.end_render_pass(command_buffer);
         device

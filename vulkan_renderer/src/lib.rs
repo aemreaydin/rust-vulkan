@@ -3,6 +3,7 @@ pub mod command_pool;
 pub mod device;
 pub mod enums;
 pub mod framebuffer;
+pub mod image;
 pub mod instance;
 pub mod macros;
 pub mod physical_device;

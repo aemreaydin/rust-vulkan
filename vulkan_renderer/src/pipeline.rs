@@ -1,7 +1,7 @@
 use crate::{device::VDevice, impl_get, RendererResult};
 use ash::vk::{
-    CullModeFlags, DescriptorSetLayout, FrontFace, GraphicsPipelineCreateInfo, LogicOp, Pipeline,
-    PipelineCache, PipelineColorBlendAttachmentState, PipelineColorBlendStateCreateInfo,
+    CompareOp, CullModeFlags, DescriptorSetLayout, FrontFace, GraphicsPipelineCreateInfo, LogicOp,
+    Pipeline, PipelineCache, PipelineColorBlendAttachmentState, PipelineColorBlendStateCreateInfo,
     PipelineDepthStencilStateCreateInfo, PipelineInputAssemblyStateCreateInfo, PipelineLayout,
     PipelineLayoutCreateInfo, PipelineMultisampleStateCreateInfo,
     PipelineRasterizationStateCreateInfo, PipelineShaderStageCreateInfo,
@@ -29,6 +29,7 @@ pub struct VGraphicsPipelineBuilder {
     color_blend_state: PipelineColorBlendStateCreateInfo,
     multisample: PipelineMultisampleStateCreateInfo,
     pipeline_layout_create_info: PipelineLayoutCreateInfo,
+    depth_stencil_create_info: PipelineDepthStencilStateCreateInfo,
     viewport: PipelineViewportStateCreateInfo,
 }
 
@@ -37,10 +38,11 @@ impl VGraphicsPipelineBuilder {
         Self {
             input_assembly: Self::input_assembly_create_info(PrimitiveTopology::TRIANGLE_LIST),
             vertex_input: Self::vertex_input_create_info(&[], &[]),
-            rasterization: Self::rasterization_create_info(CullModeFlags::NONE, PolygonMode::FILL),
+            rasterization: Self::rasterization_create_info(CullModeFlags::BACK, PolygonMode::FILL),
             color_blend_state: Self::color_blend_state_create_info(&[]),
             multisample: Self::multisample_create_info(),
             pipeline_layout_create_info: Self::pipeline_layout_create_info(&[], &[]),
+            depth_stencil_create_info: Self::depth_stencil_create_info(),
             ..Default::default()
         }
     }
@@ -83,7 +85,7 @@ impl VGraphicsPipelineBuilder {
             p_viewport_state: &self.viewport,
             p_rasterization_state: &self.rasterization,
             p_multisample_state: &self.multisample,
-            // p_depth_stencil_state: &self.depth_stencil_create_info(),
+            p_depth_stencil_state: &self.depth_stencil_create_info,
             p_color_blend_state: &self.color_blend_state,
             layout,
             render_pass,
@@ -193,7 +195,7 @@ impl VGraphicsPipelineBuilder {
             line_width: 1.0,
             cull_mode,
             polygon_mode,
-            front_face: FrontFace::CLOCKWISE,
+            front_face: FrontFace::COUNTER_CLOCKWISE,
             ..Default::default()
         }
     }
@@ -243,9 +245,13 @@ impl VGraphicsPipelineBuilder {
         }
     }
 
-    #[allow(dead_code)]
-    fn depth_stencil_create_info(&self) -> PipelineDepthStencilStateCreateInfo {
+    fn depth_stencil_create_info() -> PipelineDepthStencilStateCreateInfo {
         PipelineDepthStencilStateCreateInfo {
+            depth_test_enable: 1,
+            depth_write_enable: 1,
+            depth_compare_op: CompareOp::LESS_OR_EQUAL,
+            min_depth_bounds: 0.0,
+            max_depth_bounds: 1.0,
             ..Default::default()
         }
     }
