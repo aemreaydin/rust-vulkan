@@ -21,12 +21,14 @@ use vulkan_renderer::{
     slice_utils::U8Slice,
     surface::VSurface,
     swapchain::VSwapchain,
-    sync::{VFence, VSemaphore},
+    sync::VFrameData,
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
+
+const NUM_FRAMES: usize = 3;
 
 fn main() {
     // Device Vars
@@ -72,9 +74,7 @@ fn main() {
         surface.dimensions(),
     )
     .expect("Failed to create framebuffers.");
-    let command_buffer = device
-        .allocate_command_buffers(1, EOperationType::Graphics)
-        .expect("Failed to allocate command buffers.")[0];
+
     // Graphics Pipeline
     let builder = VGraphicsPipelineBuilder::start();
     let shader_infos = &[
@@ -113,17 +113,27 @@ fn main() {
         .build(&device)
         .expect("Failed to create graphics pipeline.");
 
-    // Sync Vars
-    let fence = VFence::new(&device, true).expect("Failed to create fence.");
-    let graphics_semaphore =
-        VSemaphore::new(&device).expect("Failed to create graphics semaphore.");
-    let present_semaphore = VSemaphore::new(&device).expect("Failed to create present semaphore.");
+    // Frame Data
+    let frame_datas = (0..NUM_FRAMES)
+        .map(|_| {
+            VFrameData::new(&device, physical_device.queue_family_indices())
+                .expect("Failed to create FrameData.")
+        })
+        .collect::<Vec<_>>();
 
     let box_mesh = Mesh::from_file(&device, "sample/assets/damaged_helmet/damaged_helmet.glb")
         .expect("Failed to load mesh.");
 
     let mut frame_count = 0;
     event_loop.run(move |event, _, control_flow| {
+        let VFrameData {
+            fence,
+            command_buffer,
+            render_semaphore,
+            present_semaphore,
+            command_pool: _,
+        } = frame_datas[frame_count % NUM_FRAMES];
+
         let fences = &[fence.get()];
         device
             .wait_for_fences(fences, 1_000_000_000)
@@ -199,7 +209,7 @@ fn main() {
 
         let command_buffers = &[command_buffer];
         let wait_semaphores = &[present_semaphore.get()];
-        let dst_semaphores = &[graphics_semaphore.get()];
+        let dst_semaphores = &[render_semaphore.get()];
         let pipeline_stage_flags = &[PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let submit_info = VDevice::create_queue_submit_info(
             command_buffers,
@@ -218,7 +228,7 @@ fn main() {
 
         let image_indices = &[image_ind];
         let swapchains = &[swapchain.swapchain_khr()];
-        let wait_semaphores = &[graphics_semaphore.get()];
+        let wait_semaphores = &[render_semaphore.get()];
         let present_info =
             VSwapchain::create_present_info(image_indices, swapchains, wait_semaphores);
         swapchain

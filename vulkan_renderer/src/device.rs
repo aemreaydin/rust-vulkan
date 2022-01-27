@@ -1,5 +1,4 @@
 use crate::{
-    command_pool::VCommandPools,
     enums::EOperationType,
     instance::VInstance,
     physical_device::VPhysicalDevice,
@@ -25,7 +24,6 @@ use std::collections::HashSet;
 pub struct VDevice {
     device: Device,
     queues: VQueues,
-    command_pools: VCommandPools,
     render_pass: VRenderPass,
     memory_properties: PhysicalDeviceMemoryProperties,
 }
@@ -42,7 +40,6 @@ impl VDevice {
         };
 
         let queues = VQueues::new(&device, physical_device.queue_family_indices());
-        let command_pools = VCommandPools::new(&device, physical_device.queue_family_indices())?;
         let render_pass = VRenderPass::new(
             &device,
             physical_device
@@ -54,7 +51,6 @@ impl VDevice {
         Ok(Self {
             device,
             queues,
-            command_pools,
             render_pass,
             memory_properties: physical_device
                 .physical_device_information()
@@ -74,23 +70,19 @@ impl VDevice {
         self.render_pass.get()
     }
 
-    pub fn get_command_pool(&self, operation_type: EOperationType) -> CommandPool {
-        self.command_pools.get(operation_type)
-    }
-
     pub fn memory_properties(&self) -> PhysicalDeviceMemoryProperties {
         self.memory_properties
     }
 
     pub fn allocate_command_buffers(
         &self,
+        command_pool: CommandPool,
         command_buffer_count: u32,
-        operation_type: EOperationType,
     ) -> RendererResult<Vec<CommandBuffer>> {
         let command_buffer_allocate_info = CommandBufferAllocateInfo {
             command_buffer_count,
             level: CommandBufferLevel::PRIMARY,
-            command_pool: self.get_command_pool(operation_type),
+            command_pool,
             ..Default::default()
         };
 
@@ -306,7 +298,10 @@ impl VDevice {
 #[cfg(test)]
 mod tests {
     use super::{VDevice, VPhysicalDevice};
-    use crate::{enums::EOperationType, instance::VInstance, surface::VSurface, RendererResult};
+    use crate::{
+        command_pool::VCommandPools, enums::EOperationType, instance::VInstance, surface::VSurface,
+        RendererResult,
+    };
     use ash::vk::Handle;
     use winit::platform::windows::EventLoopExtWindows;
 
@@ -337,10 +332,14 @@ mod tests {
             let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
             let device = VDevice::new(&instance, &physical_device)?;
-
+            let command_pools =
+                VCommandPools::new(&device, physical_device.queue_family_indices())?;
             let num_buffers = 3;
-            let command_buffers =
-                VDevice::allocate_command_buffers(&device, num_buffers, EOperationType::Graphics)?;
+            let command_buffers = VDevice::allocate_command_buffers(
+                &device,
+                command_pools.get(EOperationType::Graphics),
+                num_buffers,
+            )?;
 
             assert_eq!(command_buffers.len(), num_buffers as usize);
             for buffer in command_buffers {

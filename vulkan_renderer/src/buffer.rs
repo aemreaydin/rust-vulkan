@@ -1,14 +1,9 @@
-use std::mem::{align_of, size_of};
-
 use crate::{device::VDevice, impl_get, RendererResult};
-use ash::{
-    util::Align,
-    vk::{
-        Buffer, BufferCreateInfo, BufferUsageFlags, DeviceMemory, MemoryAllocateInfo,
-        MemoryMapFlags, MemoryPropertyFlags, MemoryRequirements, PhysicalDeviceMemoryProperties,
-        SharingMode,
-    },
+use ash::vk::{
+    Buffer, BufferCreateInfo, BufferUsageFlags, DeviceMemory, MemoryAllocateInfo, MemoryMapFlags,
+    MemoryPropertyFlags, MemoryRequirements, PhysicalDeviceMemoryProperties, SharingMode,
 };
+use std::mem::size_of;
 
 #[derive(Clone, Copy, Default)]
 pub struct VBuffer {
@@ -35,17 +30,12 @@ impl VBuffer {
         let allocate_info = Self::memory_allocate_info(mem_type_ind, mem_req.size);
         let memory = unsafe { device.get().allocate_memory(&allocate_info, None)? };
 
-        let ptr = unsafe {
-            device
+        unsafe {
+            let ptr = device
                 .get()
                 .map_memory(memory, 0, mem_req.size, MemoryMapFlags::empty())
-                .expect("Failed to map memory.")
-        };
-
-        let mut align = unsafe { Align::new(ptr, align_of::<T>() as u64, mem_req.size) };
-        align.copy_from_slice(data);
-
-        unsafe {
+                .expect("Failed to map memory.");
+            std::ptr::copy_nonoverlapping(data.as_ptr(), ptr.cast(), data.len());
             device.get().unmap_memory(memory);
         }
 

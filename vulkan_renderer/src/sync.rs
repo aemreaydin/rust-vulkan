@@ -1,7 +1,14 @@
-use ash::vk::{Fence, FenceCreateFlags, FenceCreateInfo, Semaphore, SemaphoreCreateInfo};
+use ash::vk::{
+    CommandBuffer, CommandPool, Fence, FenceCreateFlags, FenceCreateInfo, Semaphore,
+    SemaphoreCreateInfo,
+};
 
-use crate::{device::VDevice, RendererResult};
+use crate::{
+    command_pool::VCommandPools, device::VDevice, enums::EOperationType,
+    queue_family::VQueueFamilyIndices, RendererResult,
+};
 
+#[derive(Clone, Copy)]
 pub struct VFence {
     fence: Fence,
 }
@@ -29,6 +36,7 @@ impl VFence {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct VSemaphore {
     semaphore: Semaphore,
 }
@@ -48,6 +56,37 @@ impl VSemaphore {
         SemaphoreCreateInfo {
             ..Default::default()
         }
+    }
+}
+
+pub struct VFrameData {
+    pub fence: VFence,
+    pub present_semaphore: VSemaphore,
+    pub render_semaphore: VSemaphore,
+    pub command_pool: CommandPool,
+    pub command_buffer: CommandBuffer,
+}
+
+impl VFrameData {
+    pub fn new(
+        device: &VDevice,
+        queue_family_indices: VQueueFamilyIndices,
+    ) -> RendererResult<Self> {
+        let fence = VFence::new(device, true)?;
+        let present_semaphore = VSemaphore::new(device)?;
+        let render_semaphore = VSemaphore::new(device)?;
+        // TODO CommandPool changes will affect this
+        let command_pool =
+            VCommandPools::new(device, queue_family_indices)?.get(EOperationType::Graphics);
+        let command_buffer = device.allocate_command_buffers(command_pool, 1)?[0];
+
+        Ok(Self {
+            fence,
+            present_semaphore,
+            render_semaphore,
+            command_buffer,
+            command_pool,
+        })
     }
 }
 
