@@ -223,3 +223,39 @@ impl VBuffer {
 
 impl_get!(VBuffer, buffer, Buffer);
 impl_get!(VBuffer, memory, DeviceMemory);
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        device::VDevice, instance::VInstance, physical_device::VPhysicalDevice,
+        primitives::vertex::Vertex, surface::VSurface, RendererResult,
+    };
+    use ash::vk::Handle;
+    use winit::platform::windows::EventLoopExtWindows;
+
+    use super::VBuffer;
+
+    #[test]
+    fn creates_buffers() -> RendererResult<()> {
+        let instance = VInstance::new("Test", 0)?;
+
+        #[cfg(target_os = "windows")]
+        {
+            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
+            let physical_device = VPhysicalDevice::new(&instance, &surface)?;
+            let device = VDevice::new(&instance, &physical_device)?;
+
+            let vertices = vec![Vertex::default(), Vertex::default(), Vertex::default()];
+            let indices = vec![1, 2, 3];
+
+            let vertex_buffer = VBuffer::new_vertex_buffer(&device, &vertices)?;
+            let index_buffer = VBuffer::new_index_buffer(&device, &indices)?;
+
+            assert_ne!(vertex_buffer.buffer.as_raw(), 0);
+            assert_ne!(vertex_buffer.memory.as_raw(), 0);
+            assert_ne!(index_buffer.buffer.as_raw(), 0);
+            assert_ne!(index_buffer.memory.as_raw(), 0);
+        }
+        Ok(())
+    }
+}
