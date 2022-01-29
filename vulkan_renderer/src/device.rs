@@ -24,6 +24,7 @@ use std::collections::HashSet;
 pub struct VDevice {
     device: Device,
     queues: VQueues,
+    queue_family_indices: VQueueFamilyIndices,
     render_pass: VRenderPass,
     memory_properties: PhysicalDeviceMemoryProperties,
 }
@@ -51,6 +52,7 @@ impl VDevice {
         Ok(Self {
             device,
             queues,
+            queue_family_indices: physical_device.queue_family_indices(),
             render_pass,
             memory_properties: physical_device
                 .physical_device_information()
@@ -64,6 +66,10 @@ impl VDevice {
 
     pub fn get_queue(&self, operation_type: EOperationType) -> Queue {
         self.queues.get(operation_type)
+    }
+
+    pub fn get_queue_family_index(&self, operation_type: EOperationType) -> u32 {
+        self.queue_family_indices.get(operation_type)
     }
 
     pub fn render_pass(&self) -> RenderPass {
@@ -299,10 +305,9 @@ impl VDevice {
 mod tests {
     use super::{VDevice, VPhysicalDevice};
     use crate::{
-        command_pool::VCommandPools, enums::EOperationType, instance::VInstance, surface::VSurface,
-        RendererResult,
+        command_pool::VCommandPool, instance::VInstance, surface::VSurface, RendererResult,
     };
-    use ash::vk::Handle;
+    use ash::vk::{CommandPoolCreateFlags, Handle};
     use winit::platform::windows::EventLoopExtWindows;
 
     #[test]
@@ -332,14 +337,14 @@ mod tests {
             let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
             let device = VDevice::new(&instance, &physical_device)?;
-            let command_pools =
-                VCommandPools::new(&device, physical_device.queue_family_indices())?;
-            let num_buffers = 3;
-            let command_buffers = VDevice::allocate_command_buffers(
+            let command_pool = VCommandPool::new(
                 &device,
-                command_pools.get(EOperationType::Graphics),
-                num_buffers,
+                physical_device.queue_family_indices().graphics,
+                CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
             )?;
+            let num_buffers = 3;
+            let command_buffers =
+                VDevice::allocate_command_buffers(&device, command_pool.get(), num_buffers)?;
 
             assert_eq!(command_buffers.len(), num_buffers as usize);
             for buffer in command_buffers {

@@ -8,6 +8,16 @@ pub struct VQueueFamilyIndices {
     pub present: u32,
 }
 
+impl VQueueFamilyIndices {
+    pub fn get(&self, operation_type: EOperationType) -> u32 {
+        match operation_type {
+            EOperationType::Compute => self.compute,
+            EOperationType::Graphics => self.graphics,
+            EOperationType::Present => self.present,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct VQueues {
     pub compute: Queue,

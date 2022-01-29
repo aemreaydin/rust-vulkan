@@ -116,7 +116,7 @@ fn main() {
     // Frame Data
     let frame_datas = (0..NUM_FRAMES)
         .map(|_| {
-            VFrameData::new(&device, physical_device.queue_family_indices())
+            VFrameData::new(&device, physical_device.queue_family_indices().graphics)
                 .expect("Failed to create FrameData.")
         })
         .collect::<Vec<_>>();
