@@ -138,11 +138,11 @@ impl VGraphicsPipelineBuilder {
 
     pub fn pipeline_layout(
         mut self,
-        descriptor_sets: &[DescriptorSetLayout],
+        descriptor_set_layouts: &[DescriptorSetLayout],
         push_constants: &[PushConstantRange],
     ) -> Self {
         self.pipeline_layout_create_info =
-            Self::pipeline_layout_create_info(descriptor_sets, push_constants);
+            Self::pipeline_layout_create_info(descriptor_set_layouts, push_constants);
         self
     }
 

@@ -1,11 +1,14 @@
 use ash::vk::{
-    ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags, Extent3D, Format,
-    ImageAspectFlags, ImageUsageFlags, PipelineBindPoint, PipelineColorBlendAttachmentState,
-    PipelineStageFlags, PushConstantRange, Rect2D, ShaderStageFlags, Viewport,
+    ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags, DescriptorType,
+    Extent3D, Format, ImageAspectFlags, ImageUsageFlags, MemoryMapFlags, PipelineBindPoint,
+    PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
+    ShaderStageFlags, Viewport,
 };
 use glam::{Mat4, Vec3};
 use std::mem::size_of;
 use vulkan_renderer::{
+    camera::VCameraData,
+    descriptorset::{VDescriptorPool, VDescriptorSetLayout},
     device::VDevice,
     enums::EOperationType,
     framebuffer::VFramebuffers,
@@ -75,6 +78,17 @@ fn main() {
     )
     .expect("Failed to create framebuffers.");
 
+    // Descriptor Set
+    let bindings = &[VDescriptorSetLayout::layout_binding(
+        0,
+        1,
+        DescriptorType::UNIFORM_BUFFER,
+        ShaderStageFlags::VERTEX,
+    )];
+    let descriptor_pool = VDescriptorPool::new(&device).expect("Failed to create descriptor pool.");
+    let descriptor_set_layout = VDescriptorSetLayout::new(&device, bindings)
+        .expect("Failed to create descriptor set layout.");
+
     // Graphics Pipeline
     let builder = VGraphicsPipelineBuilder::start();
     let shader_infos = &[
@@ -103,12 +117,13 @@ fn main() {
         size: size_of::<MeshPushConstants>() as u32,
         offset: 0,
     }];
+    let descriptor_set_layouts = &[descriptor_set_layout.get()];
     let builder = builder
         .shader_stages(shader_infos)
         .vertex_input(&vertex_input_desc.bindings, &vertex_input_desc.attributes)
         .viewport(viewports, scissors)
         .color_blend_state(color_blend_attachments)
-        .pipeline_layout(&[], push_constants);
+        .pipeline_layout(descriptor_set_layouts, push_constants);
     let pipeline = builder
         .build(&device)
         .expect("Failed to create graphics pipeline.");
@@ -116,8 +131,13 @@ fn main() {
     // Frame Data
     let frame_datas = (0..NUM_FRAMES)
         .map(|_| {
-            VFrameData::new(&device, physical_device.queue_family_indices().graphics)
-                .expect("Failed to create FrameData.")
+            VFrameData::new(
+                &device,
+                physical_device.queue_family_indices().graphics,
+                descriptor_pool.get(),
+                &[descriptor_set_layout.get()],
+            )
+            .expect("Failed to create FrameData.")
         })
         .collect::<Vec<_>>();
 
@@ -132,6 +152,8 @@ fn main() {
             render_semaphore,
             present_semaphore,
             command_pool: _,
+            camera_buffer,
+            desc_set,
         } = frame_datas[frame_count % NUM_FRAMES];
 
         let fences = &[fence.get()];
@@ -182,14 +204,27 @@ fn main() {
         device.bind_index_buffer(command_buffer, box_mesh.index_buffer().buffer(), 0);
 
         // Camera and Model
-        let camera = Vec3::new(0.0, 0.0, -2.0);
-        let mut view = Mat4::look_at_rh(camera, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-        view.col_mut(1)[1] *= -1.0;
-        let projection = Mat4::perspective_rh(70.0f32.to_radians(), 1920.0 / 1080.0, 0.1, 100.0);
-        let model = Mat4::from_rotation_y(frame_count as f32 * 0.0002);
+        let camera = Vec3::new(0.0, 0.0, -5.0);
+        let view = Mat4::look_at_rh(camera, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+        // let view = Mat4::from_translation(camera);
+        let mut projection =
+            Mat4::perspective_rh(70.0f32.to_radians(), 1920.0 / 1080.0, 0.1, 100.0);
+        projection.col_mut(1)[1] *= -1.0;
+        let camera_data = VCameraData { view, projection };
+
+        camera_buffer
+            .map_memory(&device, &[camera_data])
+            .expect("Failed to map memory.");
+
+        device.descriptor_sets(
+            command_buffer,
+            PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout(),
+            &[desc_set],
+        );
 
         let constants = MeshPushConstants {
-            mvp: projection * view * model,
+            mvp: Mat4::default(),
         };
 
         device.push_constants(

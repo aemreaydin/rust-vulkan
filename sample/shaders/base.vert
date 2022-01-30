@@ -6,11 +6,17 @@ layout(location = 2) in vec2 uv;
 
 layout(location = 0) out vec3 outColor;
 
-layout (push_constant) uniform ModelViewProjection {
-    mat4 mvp;
-} MVP;
+layout (push_constant) uniform PushConstants {
+    mat4 model;
+} PC;
+
+layout(set = 0, binding = 0) uniform CameraBuffer {
+    mat4 view;
+    mat4 proj;
+} CB;
 
 void main() {
     outColor = normal;
-    gl_Position = MVP.mvp * vec4(position, 1.0);
+    mat4 mvp = CB.proj * CB.view * PC.model;
+    gl_Position = mvp * vec4(position, 1.0);
 }

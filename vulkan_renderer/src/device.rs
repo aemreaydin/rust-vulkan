@@ -10,7 +10,7 @@ use ash::{
     extensions::khr::Swapchain,
     vk::{
         Buffer, ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
-        CommandBufferLevel, CommandBufferUsageFlags, CommandPool, DeviceCreateInfo,
+        CommandBufferLevel, CommandBufferUsageFlags, CommandPool, DescriptorSet, DeviceCreateInfo,
         DeviceQueueCreateInfo, DeviceSize, Extent2D, Fence, Framebuffer, IndexType, Offset2D,
         PhysicalDeviceMemoryProperties, Pipeline, PipelineBindPoint, PipelineLayout,
         PipelineStageFlags, Queue, Rect2D, RenderPass, RenderPassBeginInfo, Semaphore,
@@ -189,6 +189,25 @@ impl VDevice {
         unsafe {
             self.device
                 .cmd_push_constants(command_buffer, layout, stage_flags, 0, constants);
+        }
+    }
+
+    pub fn descriptor_sets(
+        &self,
+        command_buffer: CommandBuffer,
+        pipeline_bind_point: PipelineBindPoint,
+        layout: PipelineLayout,
+        descriptor_sets: &[DescriptorSet],
+    ) {
+        unsafe {
+            self.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                pipeline_bind_point,
+                layout,
+                0,
+                descriptor_sets,
+                &[],
+            );
         }
     }
 

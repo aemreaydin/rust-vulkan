@@ -1,5 +1,5 @@
 use super::vertex::Vertex;
-use crate::{buffer::VBuffer, device::VDevice, impl_get, impl_get_ref};
+use crate::{buffer::VBuffer, device::VDevice, impl_get, impl_get_ref, slice_utils::impl_u8_slice};
 use glam::Mat4;
 use itertools::izip;
 
@@ -69,3 +69,5 @@ impl_get!(Mesh, index_buffer, VBuffer);
 pub struct MeshPushConstants {
     pub mvp: Mat4,
 }
+
+impl_u8_slice!(MeshPushConstants);

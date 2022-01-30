@@ -18,6 +18,7 @@ use std::mem::size_of;
 pub struct VBuffer {
     buffer: Buffer,
     memory: DeviceMemory,
+    allocation: u64,
 }
 // Create a staging buffer
 // Create a transient command buffer
@@ -32,14 +33,19 @@ impl VBuffer {
         usage: BufferUsageFlags,
         flags: MemoryPropertyFlags,
     ) -> RendererResult<Self> {
-        let buffer = Self::create_buffer(device, data, usage)?;
+        let buffer = Self::create_buffer(device, (data.len() * size_of::<T>()) as u64, usage)?;
         let memory_requirements = Self::memory_requirements(device, buffer);
         let memory = Self::create_memory(device, memory_requirements, flags)?;
         unsafe { device.get().bind_buffer_memory(buffer, memory, 0)? };
 
-        Self::map_memory(device, data, memory, memory_requirements)?;
+        let vbuffer = Self {
+            buffer,
+            memory,
+            allocation: memory_requirements.size,
+        };
+        vbuffer.map_memory(device, data)?;
 
-        Ok(Self { buffer, memory })
+        Ok(vbuffer)
     }
 
     /// Creates a [`Buffer`] and a [`DeviceMemory`] without mapping
@@ -51,12 +57,33 @@ impl VBuffer {
         usage: BufferUsageFlags,
         flags: MemoryPropertyFlags,
     ) -> RendererResult<Self> {
-        let buffer = Self::create_buffer(device, data, usage)?;
+        let buffer = Self::create_buffer(device, (data.len() * size_of::<T>()) as u64, usage)?;
         let memory_requirements = Self::memory_requirements(device, buffer);
         let memory = Self::create_memory(device, memory_requirements, flags)?;
         unsafe { device.get().bind_buffer_memory(buffer, memory, 0)? };
 
-        Ok(Self { buffer, memory })
+        Ok(Self {
+            buffer,
+            memory,
+            allocation: memory_requirements.size,
+        })
+    }
+
+    pub fn new_uniform_buffer(
+        device: &VDevice,
+        size: u64,
+        flags: MemoryPropertyFlags,
+    ) -> RendererResult<Self> {
+        let buffer = Self::create_buffer(device, size, BufferUsageFlags::UNIFORM_BUFFER)?;
+        let memory_requirements = Self::memory_requirements(device, buffer);
+        let memory = Self::create_memory(device, memory_requirements, flags)?;
+        unsafe { device.get().bind_buffer_memory(buffer, memory, 0)? };
+
+        Ok(Self {
+            buffer,
+            memory,
+            allocation: memory_requirements.size,
+        })
     }
 
     pub fn new_vertex_buffer(device: &VDevice, vertices: &[Vertex]) -> RendererResult<Self> {
@@ -104,7 +131,27 @@ impl VBuffer {
         Ok(index_buffer)
     }
 
-    fn copy_buffer<T>(
+    pub fn create_buffer(
+        device: &VDevice,
+        size: u64,
+        usage: BufferUsageFlags,
+    ) -> RendererResult<Buffer> {
+        let create_info = Self::buffer_create_info(size, usage);
+        unsafe { Ok(device.get().create_buffer(&create_info, None)?) }
+    }
+
+    pub fn create_memory(
+        device: &VDevice,
+        memory_requirements: MemoryRequirements,
+        flags: MemoryPropertyFlags,
+    ) -> RendererResult<DeviceMemory> {
+        let mem_type_ind =
+            Self::find_memory_type_index(memory_requirements, device.memory_properties(), flags);
+        let allocate_info = Self::memory_allocate_info(mem_type_ind, memory_requirements.size);
+        Ok(unsafe { device.get().allocate_memory(&allocate_info, None)? })
+    }
+
+    pub fn copy_buffer<T>(
         device: &VDevice,
         data: &[T],
         src: Buffer,
@@ -144,41 +191,17 @@ impl VBuffer {
 
         Ok(())
     }
-    fn create_buffer<T: Copy>(
-        device: &VDevice,
-        data: &[T],
-        usage: BufferUsageFlags,
-    ) -> RendererResult<Buffer> {
-        let create_info = Self::buffer_create_info((data.len() * size_of::<T>()) as u64, usage);
-        unsafe { Ok(device.get().create_buffer(&create_info, None)?) }
-    }
 
-    fn create_memory(
-        device: &VDevice,
-        memory_requirements: MemoryRequirements,
-        flags: MemoryPropertyFlags,
-    ) -> RendererResult<DeviceMemory> {
-        let mem_type_ind =
-            Self::find_memory_type_index(memory_requirements, device.memory_properties(), flags);
-        let allocate_info = Self::memory_allocate_info(mem_type_ind, memory_requirements.size);
-        Ok(unsafe { device.get().allocate_memory(&allocate_info, None)? })
-    }
-
-    fn map_memory<T: Copy>(
-        device: &VDevice,
-        data: &[T],
-        memory: DeviceMemory,
-        memory_requirements: MemoryRequirements,
-    ) -> RendererResult<()> {
+    pub fn map_memory<T: Copy>(&self, device: &VDevice, data: &[T]) -> RendererResult<()> {
         unsafe {
             let ptr = device.get().map_memory(
-                memory,
+                self.memory,
                 0,
-                memory_requirements.size,
+                self.allocation,
                 MemoryMapFlags::empty(),
             )?;
             std::ptr::copy_nonoverlapping(data.as_ptr(), ptr.cast(), data.len());
-            device.get().unmap_memory(memory);
+            device.get().unmap_memory(self.memory);
         };
         Ok(())
     }
@@ -223,6 +246,7 @@ impl VBuffer {
 
 impl_get!(VBuffer, buffer, Buffer);
 impl_get!(VBuffer, memory, DeviceMemory);
+impl_get!(VBuffer, allocation, u64);
 
 #[cfg(test)]
 mod tests {
