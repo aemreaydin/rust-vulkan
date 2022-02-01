@@ -1,11 +1,14 @@
 use ash::vk::{
     ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags, DescriptorType,
-    Extent3D, Format, ImageAspectFlags, ImageUsageFlags, MemoryMapFlags, PipelineBindPoint,
+    Extent3D, Format, ImageAspectFlags, ImageUsageFlags, PipelineBindPoint,
     PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
     ShaderStageFlags, Viewport,
 };
 use glam::{Mat4, Vec3};
+use macros::U8Slice;
+use mesh::{Mesh, MeshPushConstants};
 use std::mem::size_of;
+use vertex::Vertex;
 use vulkan_renderer::{
     camera::VCameraData,
     descriptorset::{VDescriptorPool, VDescriptorSetLayout},
@@ -16,12 +19,7 @@ use vulkan_renderer::{
     instance::VInstance,
     physical_device::VPhysicalDevice,
     pipeline::VGraphicsPipelineBuilder,
-    primitives::{
-        mesh::{Mesh, MeshPushConstants},
-        vertex::Vertex,
-    },
     shader_utils::VShaderUtils,
-    slice_utils::U8Slice,
     surface::VSurface,
     swapchain::VSwapchain,
     sync::VFrameData,
@@ -30,6 +28,14 @@ use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
+
+mod camera;
+mod macros;
+mod mesh;
+mod model;
+mod scene;
+mod transform;
+mod vertex;
 
 const NUM_FRAMES: usize = 3;
 
@@ -200,8 +206,8 @@ fn main() {
             PipelineBindPoint::GRAPHICS,
             pipeline.pipeline(),
         );
-        device.bind_vertex_buffer(command_buffer, &[box_mesh.vertex_buffer().buffer()], &[0]);
-        device.bind_index_buffer(command_buffer, box_mesh.index_buffer().buffer(), 0);
+        device.bind_vertex_buffer(command_buffer, &[box_mesh.vertex_buffer.buffer()], &[0]);
+        device.bind_index_buffer(command_buffer, box_mesh.index_buffer.buffer(), 0);
 
         // Camera and Model
         let camera = Vec3::new(0.0, 0.0, -5.0);
@@ -234,7 +240,7 @@ fn main() {
             constants.as_u8_slice(),
         );
 
-        device.draw_indexed(command_buffer, box_mesh.indices().len() as u32, 1);
+        device.draw_indexed(command_buffer, box_mesh.indices.len() as u32, 1);
         // device.draw(command_buffer, box_mesh.vertices().len() as u32, 1);
 
         device.end_render_pass(command_buffer);

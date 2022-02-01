@@ -1,16 +1,16 @@
-use crate::impl_get;
 use ash::vk::{
     Format, VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate,
 };
 use glam::{Vec2, Vec3};
 use memoffset::offset_of;
 use std::mem::size_of;
+use vulkan_renderer::impl_get;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Vertex {
-    position: Vec3,
-    normal: Vec3,
-    uv: Vec2,
+    pub position: Vec3,
+    pub normal: Vec3,
+    pub uv: Vec2,
 }
 
 pub struct VVertexInputDescription {
@@ -67,7 +67,3 @@ impl Vertex {
         }
     }
 }
-
-impl_get!(Vertex, position, Vec3);
-impl_get!(Vertex, normal, Vec3);
-impl_get!(Vertex, uv, Vec2);

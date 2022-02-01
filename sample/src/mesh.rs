@@ -1,28 +1,32 @@
-use super::vertex::Vertex;
-use crate::{buffer::VBuffer, device::VDevice, impl_get, impl_get_ref, slice_utils::impl_u8_slice};
+use crate::{macros::impl_u8_slice, vertex::Vertex};
+use ash::vk::BufferUsageFlags;
 use glam::Mat4;
 use itertools::izip;
+use vulkan_renderer::{buffer::VBuffer, device::VDevice};
 
-pub type Index = u32;
-
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Mesh {
-    vertices: Vec<Vertex>,
-    indices: Vec<Index>,
+    uuid: String,
 
-    vertex_buffer: VBuffer,
-    index_buffer: VBuffer,
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
+
+    pub vertex_buffer: VBuffer,
+    pub index_buffer: VBuffer,
 }
 
 impl Mesh {
     pub fn new(device: &VDevice, vertices: Vec<Vertex>, indices: Vec<u32>) -> Self {
         let vertex_buffer =
-            VBuffer::new_vertex_buffer(device, &vertices).expect("Failed to create vertex buffer.");
+            VBuffer::new_device_local_buffer(device, &vertices, BufferUsageFlags::VERTEX_BUFFER)
+                .expect("Failed to create vertex buffer.");
 
         let index_buffer =
-            VBuffer::new_index_buffer(device, &indices).expect("Failed to create index buffer.");
+            VBuffer::new_device_local_buffer(device, &indices, BufferUsageFlags::INDEX_BUFFER)
+                .expect("Failed to create index buffer.");
 
         Self {
+            uuid: uuid::Uuid::new_v4().to_string(),
             vertices,
             indices,
             vertex_buffer,
@@ -60,12 +64,6 @@ impl Mesh {
     }
 }
 
-impl_get_ref!(Mesh, vertices, &[Vertex]);
-impl_get_ref!(Mesh, indices, &[Index]);
-impl_get!(Mesh, vertex_buffer, VBuffer);
-impl_get!(Mesh, index_buffer, VBuffer);
-
-// TODO Temp
 pub struct MeshPushConstants {
     pub mvp: Mat4,
 }

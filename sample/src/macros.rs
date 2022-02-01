@@ -8,7 +8,7 @@ pub trait U8Slice {
 
 macro_rules! impl_u8_slice {
     ($class: ty) => {
-        use crate::slice_utils::{to_u8_slice, U8Slice};
+        use crate::macros::{to_u8_slice, U8Slice};
         impl U8Slice for $class {
             fn as_u8_slice(&self) -> &[u8] {
                 unsafe { to_u8_slice(self) }

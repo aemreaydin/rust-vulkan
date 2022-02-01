@@ -1,10 +1,5 @@
 use crate::{
-    command_pool::VCommandPool,
-    device::VDevice,
-    enums::EOperationType,
-    impl_get,
-    primitives::{mesh::Index, vertex::Vertex},
-    RendererResult,
+    command_pool::VCommandPool, device::VDevice, enums::EOperationType, impl_get, RendererResult,
 };
 use ash::vk::{
     Buffer, BufferCopy, BufferCreateInfo, BufferUsageFlags, CommandBufferBeginInfo,
@@ -14,7 +9,7 @@ use ash::vk::{
 };
 use std::mem::size_of;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct VBuffer {
     buffer: Buffer,
     memory: DeviceMemory,
@@ -86,49 +81,28 @@ impl VBuffer {
         })
     }
 
-    pub fn new_vertex_buffer(device: &VDevice, vertices: &[Vertex]) -> RendererResult<Self> {
+    pub fn new_device_local_buffer<T: Copy>(
+        device: &VDevice,
+        data: &[T],
+        dst_usage: BufferUsageFlags,
+    ) -> RendererResult<Self> {
         let staging_buffer = Self::new_mapped(
             device,
-            vertices,
+            data,
             BufferUsageFlags::TRANSFER_SRC,
             MemoryPropertyFlags::HOST_COHERENT | MemoryPropertyFlags::HOST_VISIBLE,
         )?;
 
         let vertex_buffer = Self::new_unmapped(
             device,
-            vertices,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::VERTEX_BUFFER,
+            data,
+            BufferUsageFlags::TRANSFER_DST | dst_usage,
             MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        Self::copy_buffer(
-            device,
-            vertices,
-            staging_buffer.buffer,
-            vertex_buffer.buffer,
-        )?;
+        Self::copy_buffer(device, data, staging_buffer.buffer, vertex_buffer.buffer)?;
 
         Ok(vertex_buffer)
-    }
-
-    pub fn new_index_buffer(device: &VDevice, indices: &[Index]) -> RendererResult<Self> {
-        let staging_buffer = Self::new_mapped(
-            device,
-            indices,
-            BufferUsageFlags::TRANSFER_SRC,
-            MemoryPropertyFlags::HOST_COHERENT | MemoryPropertyFlags::HOST_VISIBLE,
-        )?;
-
-        let index_buffer = Self::new_unmapped(
-            device,
-            indices,
-            BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::INDEX_BUFFER,
-            MemoryPropertyFlags::DEVICE_LOCAL,
-        )?;
-
-        Self::copy_buffer(device, indices, staging_buffer.buffer, index_buffer.buffer)?;
-
-        Ok(index_buffer)
     }
 
     pub fn create_buffer(
@@ -251,10 +225,10 @@ impl_get!(VBuffer, allocation, u64);
 #[cfg(test)]
 mod tests {
     use crate::{
-        device::VDevice, instance::VInstance, physical_device::VPhysicalDevice,
-        primitives::vertex::Vertex, surface::VSurface, RendererResult,
+        device::VDevice, instance::VInstance, physical_device::VPhysicalDevice, surface::VSurface,
+        RendererResult,
     };
-    use ash::vk::Handle;
+    use ash::vk::{BufferUsageFlags, Handle};
     use winit::platform::windows::EventLoopExtWindows;
 
     use super::VBuffer;
@@ -269,14 +243,14 @@ mod tests {
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
             let device = VDevice::new(&instance, &physical_device)?;
 
-            let vertices = vec![Vertex::default(), Vertex::default(), Vertex::default()];
             let indices = vec![1, 2, 3];
 
-            let vertex_buffer = VBuffer::new_vertex_buffer(&device, &vertices)?;
-            let index_buffer = VBuffer::new_index_buffer(&device, &indices)?;
+            let index_buffer = VBuffer::new_device_local_buffer(
+                &device,
+                &indices,
+                BufferUsageFlags::INDEX_BUFFER,
+            )?;
 
-            assert_ne!(vertex_buffer.buffer.as_raw(), 0);
-            assert_ne!(vertex_buffer.memory.as_raw(), 0);
             assert_ne!(index_buffer.buffer.as_raw(), 0);
             assert_ne!(index_buffer.memory.as_raw(), 0);
         }
