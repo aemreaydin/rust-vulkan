@@ -19,4 +19,4 @@ pub mod sync;
 
 pub use glam;
 pub(crate) type RendererError = Box<dyn std::error::Error>;
-pub(crate) type RendererResult<T> = Result<T, RendererError>;
+pub type RendererResult<T> = Result<T, RendererError>;

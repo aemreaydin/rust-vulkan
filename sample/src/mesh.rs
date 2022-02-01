@@ -6,8 +6,6 @@ use vulkan_renderer::{buffer::VBuffer, device::VDevice};
 
 #[derive(Default, Debug, Clone)]
 pub struct Mesh {
-    uuid: String,
-
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
 
@@ -26,7 +24,6 @@ impl Mesh {
                 .expect("Failed to create index buffer.");
 
         Self {
-            uuid: uuid::Uuid::new_v4().to_string(),
             vertices,
             indices,
             vertex_buffer,

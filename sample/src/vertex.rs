@@ -4,7 +4,6 @@ use ash::vk::{
 use glam::{Vec2, Vec3};
 use memoffset::offset_of;
 use std::mem::size_of;
-use vulkan_renderer::impl_get;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Vertex {

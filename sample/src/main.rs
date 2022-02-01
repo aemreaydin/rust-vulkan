@@ -4,13 +4,16 @@ use ash::vk::{
     PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
     ShaderStageFlags, Viewport,
 };
-use glam::{Mat4, Vec3};
-use macros::U8Slice;
+use camera::Camera;
+use frame_data::FrameData;
+use glam::Vec3;
 use mesh::{Mesh, MeshPushConstants};
-use std::mem::size_of;
+use model::Model;
+use scene::Scene;
+use std::{collections::HashMap, mem::size_of, time::Instant};
+use transform::Transform;
 use vertex::Vertex;
 use vulkan_renderer::{
-    camera::VCameraData,
     descriptorset::{VDescriptorPool, VDescriptorSetLayout},
     device::VDevice,
     enums::EOperationType,
@@ -22,7 +25,6 @@ use vulkan_renderer::{
     shader_utils::VShaderUtils,
     surface::VSurface,
     swapchain::VSwapchain,
-    sync::VFrameData,
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -30,6 +32,7 @@ use winit::{
 };
 
 mod camera;
+mod frame_data;
 mod macros;
 mod mesh;
 mod model;
@@ -137,7 +140,7 @@ fn main() {
     // Frame Data
     let frame_datas = (0..NUM_FRAMES)
         .map(|_| {
-            VFrameData::new(
+            FrameData::new(
                 &device,
                 physical_device.queue_family_indices().graphics,
                 descriptor_pool.get(),
@@ -147,22 +150,44 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let box_mesh = Mesh::from_file(&device, "sample/assets/damaged_helmet/damaged_helmet.glb")
-        .expect("Failed to load mesh.");
+    // SCENE DATA
+    let camera = Camera {
+        position: Vec3::new(0.0, 0.0, -5.0),
+        ..Default::default()
+    };
+    let meshes = HashMap::from_iter([(
+        "Helmet".to_owned(),
+        Mesh::from_file(&device, "sample/assets/damaged_helmet/damaged_helmet.glb")
+            .expect("Failed to load model."),
+    )]);
+    let mut scene = Scene::new(camera, meshes);
+    scene.add_models(vec![
+        Model {
+            mesh_uuid: "Helmet".to_owned(),
+            transform: Transform {
+                position: Vec3::new(-2.0, 0.0, 0.0),
+                ..Default::default()
+            },
+        },
+        Model {
+            mesh_uuid: "Helmet".to_owned(),
+            transform: Transform {
+                position: Vec3::new(2.0, 0.0, 0.0),
+                ..Default::default()
+            },
+        },
+    ]);
 
+    let mut current_time = Instant::now();
     let mut frame_count = 0;
     event_loop.run(move |event, _, control_flow| {
-        let VFrameData {
-            fence,
-            command_buffer,
-            render_semaphore,
-            present_semaphore,
-            command_pool: _,
-            camera_buffer,
-            desc_set,
-        } = frame_datas[frame_count % NUM_FRAMES];
+        let new_time = Instant::now();
+        let delta_time = (new_time - current_time).as_millis() as f64 / 1.0e3;
+        current_time = new_time;
 
-        let fences = &[fence.get()];
+        let frame_data = &frame_datas[frame_count % NUM_FRAMES];
+
+        let fences = &[frame_data.fence.get()];
         device
             .wait_for_fences(fences, 1_000_000_000)
             .expect("Failed to wait for fences.");
@@ -171,14 +196,18 @@ fn main() {
             .expect("Failed to reset fences.");
 
         let (image_ind, _is_suboptimal) = swapchain
-            .acquire_next_image(1_000_000_000, Some(present_semaphore.get()), None)
+            .acquire_next_image(
+                1_000_000_000,
+                Some(frame_data.present_semaphore.get()),
+                None,
+            )
             .expect("Failed to acquire next image.");
 
         let flash = (frame_count as f32 / 1200.0).sin().abs();
 
         // Begin Rendering
         device
-            .begin_command_buffer(command_buffer)
+            .begin_command_buffer(frame_data.command_buffer)
             .expect("Failed to begin command buffer.");
 
         let clear_values = &[
@@ -195,62 +224,30 @@ fn main() {
             },
         ];
         device.begin_render_pass(
-            command_buffer,
+            frame_data.command_buffer,
             framebuffers[image_ind],
             clear_values,
             surface.extent_2d(),
         );
 
         device.bind_pipeline(
-            command_buffer,
+            frame_data.command_buffer,
             PipelineBindPoint::GRAPHICS,
             pipeline.pipeline(),
         );
-        device.bind_vertex_buffer(command_buffer, &[box_mesh.vertex_buffer.buffer()], &[0]);
-        device.bind_index_buffer(command_buffer, box_mesh.index_buffer.buffer(), 0);
 
-        // Camera and Model
-        let camera = Vec3::new(0.0, 0.0, -5.0);
-        let view = Mat4::look_at_rh(camera, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-        // let view = Mat4::from_translation(camera);
-        let mut projection =
-            Mat4::perspective_rh(70.0f32.to_radians(), 1920.0 / 1080.0, 0.1, 100.0);
-        projection.col_mut(1)[1] *= -1.0;
-        let camera_data = VCameraData { view, projection };
+        println!("delta_time: {}", delta_time);
+        scene.update_models(delta_time);
+        scene.draw(&device, pipeline.pipeline_layout(), frame_data);
 
-        camera_buffer
-            .map_memory(&device, &[camera_data])
-            .expect("Failed to map memory.");
-
-        device.descriptor_sets(
-            command_buffer,
-            PipelineBindPoint::GRAPHICS,
-            pipeline.pipeline_layout(),
-            &[desc_set],
-        );
-
-        let constants = MeshPushConstants {
-            mvp: Mat4::default(),
-        };
-
-        device.push_constants(
-            command_buffer,
-            pipeline.pipeline_layout(),
-            ShaderStageFlags::VERTEX,
-            constants.as_u8_slice(),
-        );
-
-        device.draw_indexed(command_buffer, box_mesh.indices.len() as u32, 1);
-        // device.draw(command_buffer, box_mesh.vertices().len() as u32, 1);
-
-        device.end_render_pass(command_buffer);
+        device.end_render_pass(frame_data.command_buffer);
         device
-            .end_command_buffer(command_buffer)
+            .end_command_buffer(frame_data.command_buffer)
             .expect("Failed to end command buffer.");
 
-        let command_buffers = &[command_buffer];
-        let wait_semaphores = &[present_semaphore.get()];
-        let dst_semaphores = &[render_semaphore.get()];
+        let command_buffers = &[frame_data.command_buffer];
+        let wait_semaphores = &[frame_data.present_semaphore.get()];
+        let dst_semaphores = &[frame_data.render_semaphore.get()];
         let pipeline_stage_flags = &[PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
         let submit_info = VDevice::create_queue_submit_info(
             command_buffers,
@@ -263,13 +260,13 @@ fn main() {
             .queue_submit(
                 device.get_queue(EOperationType::Graphics),
                 &[submit_info],
-                fence.get(),
+                frame_data.fence.get(),
             )
             .expect("Failed to submit queue.");
 
         let image_indices = &[image_ind];
         let swapchains = &[swapchain.swapchain_khr()];
-        let wait_semaphores = &[render_semaphore.get()];
+        let wait_semaphores = &[frame_data.render_semaphore.get()];
         let present_info =
             VSwapchain::create_present_info(image_indices, swapchains, wait_semaphores);
         swapchain
