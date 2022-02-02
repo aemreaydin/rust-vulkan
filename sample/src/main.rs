@@ -1,19 +1,21 @@
 use ash::vk::{
     ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags, DescriptorType,
-    Extent3D, Format, ImageAspectFlags, ImageUsageFlags, PipelineBindPoint,
-    PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
-    ShaderStageFlags, Viewport,
+    Extent3D, Format, ImageAspectFlags, ImageUsageFlags, MemoryMapFlags, MemoryPropertyFlags,
+    PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange,
+    Rect2D, ShaderStageFlags, Viewport,
 };
 use camera::Camera;
 use frame_data::FrameData;
 use glam::Vec3;
 use mesh::{Mesh, MeshPushConstants};
 use model::Model;
-use scene::Scene;
-use std::{collections::HashMap, mem::size_of, time::Instant};
+use scene::{Scene, SceneData};
+use std::{collections::HashMap, mem::size_of};
 use transform::Transform;
+use utils::pad_uniform_buffer_size;
 use vertex::Vertex;
 use vulkan_renderer::{
+    buffer::VBuffer,
     descriptorset::{VDescriptorPool, VDescriptorSetLayout},
     device::VDevice,
     enums::EOperationType,
@@ -38,6 +40,7 @@ mod mesh;
 mod model;
 mod scene;
 mod transform;
+mod utils;
 mod vertex;
 
 const NUM_FRAMES: usize = 3;
@@ -88,12 +91,20 @@ fn main() {
     .expect("Failed to create framebuffers.");
 
     // Descriptor Set
-    let bindings = &[VDescriptorSetLayout::layout_binding(
-        0,
-        1,
-        DescriptorType::UNIFORM_BUFFER,
-        ShaderStageFlags::VERTEX,
-    )];
+    let bindings = &[
+        VDescriptorSetLayout::layout_binding(
+            0,
+            1,
+            DescriptorType::UNIFORM_BUFFER,
+            ShaderStageFlags::VERTEX,
+        ),
+        VDescriptorSetLayout::layout_binding(
+            1,
+            1,
+            DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+            ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT,
+        ),
+    ];
     let descriptor_pool = VDescriptorPool::new(&device).expect("Failed to create descriptor pool.");
     let descriptor_set_layout = VDescriptorSetLayout::new(&device, bindings)
         .expect("Failed to create descriptor set layout.");
@@ -138,13 +149,29 @@ fn main() {
         .expect("Failed to create graphics pipeline.");
 
     // Frame Data
+    let scene_buffer_size = NUM_FRAMES as u64
+        * pad_uniform_buffer_size(
+            size_of::<SceneData>(),
+            device
+                .physical_device_properties()
+                .limits
+                .min_uniform_buffer_offset_alignment,
+        );
+    let scene_buffer = VBuffer::new_uniform_buffer(
+        &device,
+        scene_buffer_size,
+        MemoryPropertyFlags::HOST_COHERENT | MemoryPropertyFlags::HOST_VISIBLE,
+    )
+    .expect("Failed to create scene buffer.");
     let frame_datas = (0..NUM_FRAMES)
-        .map(|_| {
+        .map(|frame_ind| {
             FrameData::new(
                 &device,
                 physical_device.queue_family_indices().graphics,
                 descriptor_pool.get(),
                 &[descriptor_set_layout.get()],
+                scene_buffer,
+                frame_ind,
             )
             .expect("Failed to create FrameData.")
         })
@@ -160,7 +187,8 @@ fn main() {
         Mesh::from_file(&device, "sample/assets/damaged_helmet/damaged_helmet.glb")
             .expect("Failed to load model."),
     )]);
-    let mut scene = Scene::new(camera, meshes);
+
+    let mut scene = Scene::new(camera, SceneData::default(), scene_buffer, meshes);
     scene.add_models(vec![
         Model {
             mesh_uuid: "Helmet".to_owned(),
@@ -178,14 +206,15 @@ fn main() {
         },
     ]);
 
-    let mut current_time = Instant::now();
+    // let mut current_time = Instant::now();
     let mut frame_count = 0;
     event_loop.run(move |event, _, control_flow| {
-        let new_time = Instant::now();
-        let delta_time = (new_time - current_time).as_millis() as f64 / 1.0e3;
-        current_time = new_time;
+        // let new_time = Instant::now();
+        // let delta_time = (new_time - current_time).as_millis() as f64 / 1.0e3;
+        // current_time = new_time;
 
-        let frame_data = &frame_datas[frame_count % NUM_FRAMES];
+        let frame_index = frame_count % NUM_FRAMES;
+        let frame_data = &frame_datas[frame_index];
 
         let fences = &[frame_data.fence.get()];
         device
@@ -236,8 +265,32 @@ fn main() {
             pipeline.pipeline(),
         );
 
-        println!("delta_time: {}", delta_time);
-        scene.update_models(delta_time);
+        scene.update_scene(frame_count as f32);
+
+        unsafe {
+            let ptr = device
+                .get()
+                .map_memory(
+                    scene.scene_buffer.memory(),
+                    0,
+                    scene.scene_buffer.allocation(),
+                    MemoryMapFlags::empty(),
+                )
+                .expect("Failed to map memory.");
+            let ptr = ptr.offset(
+                pad_uniform_buffer_size(
+                    size_of::<SceneData>(),
+                    device
+                        .physical_device_properties()
+                        .limits
+                        .min_uniform_buffer_offset_alignment,
+                ) as isize
+                    * frame_index as isize,
+            );
+            std::ptr::copy_nonoverlapping(&scene.scene_data, ptr.cast(), 1);
+            device.get().unmap_memory(scene.scene_buffer.memory());
+        }
+
         scene.draw(&device, pipeline.pipeline_layout(), frame_data);
 
         device.end_render_pass(frame_data.command_buffer);

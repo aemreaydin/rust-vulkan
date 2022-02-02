@@ -112,11 +112,6 @@ impl VPhysicalDeviceInformation {
     }
 }
 
-pub struct VPhysicalDeviceProperties {
-    pub surface_format: SurfaceFormatKHR,
-    pub present_mode: PresentModeKHR,
-    pub min_uniform_alignment: u32,
-}
 pub struct VPhysicalDevice {
     physical_device: PhysicalDevice,
     queue_family_indices: VQueueFamilyIndices,

@@ -12,9 +12,9 @@ use ash::{
         Buffer, ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
         CommandBufferLevel, CommandBufferUsageFlags, CommandPool, DescriptorSet, DeviceCreateInfo,
         DeviceQueueCreateInfo, DeviceSize, Extent2D, Fence, Framebuffer, IndexType, Offset2D,
-        PhysicalDeviceMemoryProperties, Pipeline, PipelineBindPoint, PipelineLayout,
-        PipelineStageFlags, Queue, Rect2D, RenderPass, RenderPassBeginInfo, Semaphore,
-        ShaderStageFlags, SubmitInfo, SubpassContents,
+        PhysicalDeviceMemoryProperties, PhysicalDeviceProperties, Pipeline, PipelineBindPoint,
+        PipelineLayout, PipelineStageFlags, Queue, Rect2D, RenderPass, RenderPassBeginInfo,
+        Semaphore, ShaderStageFlags, SubmitInfo, SubpassContents,
     },
     Device,
 };
@@ -27,6 +27,7 @@ pub struct VDevice {
     queue_family_indices: VQueueFamilyIndices,
     render_pass: VRenderPass,
     memory_properties: PhysicalDeviceMemoryProperties,
+    physical_device_properties: PhysicalDeviceProperties,
 }
 
 impl VDevice {
@@ -57,6 +58,7 @@ impl VDevice {
             memory_properties: physical_device
                 .physical_device_information()
                 .memory_properties,
+            physical_device_properties: physical_device.physical_device_information().properties,
         })
     }
 
@@ -78,6 +80,10 @@ impl VDevice {
 
     pub fn memory_properties(&self) -> PhysicalDeviceMemoryProperties {
         self.memory_properties
+    }
+
+    pub fn physical_device_properties(&self) -> PhysicalDeviceProperties {
+        self.physical_device_properties
     }
 
     pub fn allocate_command_buffers(
@@ -198,6 +204,7 @@ impl VDevice {
         pipeline_bind_point: PipelineBindPoint,
         layout: PipelineLayout,
         descriptor_sets: &[DescriptorSet],
+        dynamic_offsets: &[u32],
     ) {
         unsafe {
             self.device.cmd_bind_descriptor_sets(
@@ -206,7 +213,7 @@ impl VDevice {
                 layout,
                 0,
                 descriptor_sets,
-                &[],
+                dynamic_offsets,
             );
         }
     }
@@ -339,6 +346,7 @@ mod tests {
             let physical_device = VPhysicalDevice::new(&instance, &surface)?;
             let device = VDevice::new(&instance, &physical_device)?;
 
+            println!("{:#?}", device.physical_device_properties);
             // Queues
             assert_ne!(device.queues.compute.as_raw(), 0);
             assert_ne!(device.queues.graphics.as_raw(), 0);

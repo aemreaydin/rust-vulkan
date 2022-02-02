@@ -1,7 +1,7 @@
 use crate::{device::VDevice, RendererResult};
 use ash::vk::{Fence, FenceCreateFlags, FenceCreateInfo, Semaphore, SemaphoreCreateInfo};
 
-#[derive(Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct VFence {
     fence: Fence,
 }
@@ -29,7 +29,7 @@ impl VFence {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct VSemaphore {
     semaphore: Semaphore,
 }

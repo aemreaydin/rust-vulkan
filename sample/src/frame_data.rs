@@ -1,7 +1,7 @@
-use crate::camera::CameraData;
+use crate::{camera::CameraData, scene::SceneData};
 use ash::vk::{
     CommandBuffer, CommandPool, CommandPoolCreateFlags, DescriptorBufferInfo, DescriptorPool,
-    DescriptorSet, DescriptorSetLayout, DescriptorType, MemoryPropertyFlags, WriteDescriptorSet,
+    DescriptorSet, DescriptorSetLayout, DescriptorType, MemoryPropertyFlags,
 };
 use std::mem::size_of;
 use vulkan_renderer::{
@@ -21,6 +21,7 @@ pub struct FrameData {
     pub command_buffer: CommandBuffer,
     pub camera_buffer: VBuffer,
     pub desc_set: DescriptorSet,
+    pub frame_index: usize,
 }
 
 impl FrameData {
@@ -29,6 +30,8 @@ impl FrameData {
         queue_family_index: u32,
         descriptor_pool: DescriptorPool,
         descriptor_set_layouts: &[DescriptorSetLayout],
+        scene_buffer: VBuffer,
+        frame_index: usize,
     ) -> RendererResult<Self> {
         let fence = VFence::new(device, true)?;
         let present_semaphore = VSemaphore::new(device)?;
@@ -49,23 +52,34 @@ impl FrameData {
 
         let desc_set = VDescriptorSet::new(device, descriptor_pool, descriptor_set_layouts)?.get();
 
-        let buffer_info = DescriptorBufferInfo {
+        let camera_buffer_info = DescriptorBufferInfo {
             buffer: camera_buffer.buffer(),
             range: size_of::<CameraData>() as u64,
             offset: 0,
         };
-
-        let write_set = WriteDescriptorSet {
-            dst_binding: 0,
-            dst_set: desc_set,
-            descriptor_count: 1,
-            descriptor_type: DescriptorType::UNIFORM_BUFFER,
-            p_buffer_info: &buffer_info,
-            ..Default::default()
+        let scene_buffer_info = DescriptorBufferInfo {
+            buffer: scene_buffer.buffer(),
+            range: size_of::<SceneData>() as u64,
+            offset: 0,
         };
 
+        let camera_write_set = VDescriptorSet::write_descriptor_set(
+            desc_set,
+            0,
+            DescriptorType::UNIFORM_BUFFER,
+            &camera_buffer_info,
+        );
+        let scene_write_set = VDescriptorSet::write_descriptor_set(
+            desc_set,
+            1,
+            DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+            &scene_buffer_info,
+        );
+
         unsafe {
-            device.get().update_descriptor_sets(&[write_set], &[]);
+            device
+                .get()
+                .update_descriptor_sets(&[camera_write_set, scene_write_set], &[]);
         };
 
         Ok(Self {
@@ -76,6 +90,7 @@ impl FrameData {
             command_pool,
             camera_buffer,
             desc_set,
+            frame_index,
         })
     }
 }

@@ -4,24 +4,44 @@ use crate::{
     macros::U8Slice,
     mesh::{Mesh, MeshPushConstants},
     model::Model,
+    utils::pad_uniform_buffer_size,
 };
 use ash::vk::{PipelineBindPoint, PipelineLayout, ShaderStageFlags};
-use glam::{Mat4, Vec3};
-use std::collections::HashMap;
-use vulkan_renderer::device::VDevice;
+use glam::{Mat4, Vec3, Vec4};
+use std::{collections::HashMap, mem::size_of};
+use vulkan_renderer::{buffer::VBuffer, device::VDevice};
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct SceneData {
+    pub fog_color: Vec4,
+    pub fog_distance: Vec4,
+    pub ambient_color: Vec4,
+    pub sunlight_direction: Vec4,
+    pub sunlight_color: Vec4,
+}
 
 #[derive(Default, Clone)]
 pub struct Scene {
     pub camera: Camera,
     pub meshes: HashMap<String, Mesh>,
     pub models: Vec<Model>,
+
+    pub scene_data: SceneData,
+    pub scene_buffer: VBuffer,
 }
 
 impl Scene {
-    pub fn new(camera: Camera, meshes: HashMap<String, Mesh>) -> Self {
+    pub fn new(
+        camera: Camera,
+        scene_data: SceneData,
+        scene_buffer: VBuffer,
+        meshes: HashMap<String, Mesh>,
+    ) -> Self {
         Self {
             camera,
             meshes,
+            scene_data,
+            scene_buffer,
             ..Default::default()
         }
     }
@@ -34,10 +54,16 @@ impl Scene {
         self.meshes.get(&model.mesh_uuid)
     }
 
-    pub fn update_models(&mut self, delta_time: f64) {
-        for model in &mut self.models {
-            model.transform.rotation.y += delta_time as f32;
-        }
+    pub fn update_scene(&mut self, frame_number: f32) {
+        // for model in &mut self.models {
+        //     model.transform.rotation.y += delta_time as f32;
+        // }
+        self.scene_data.ambient_color = Vec4::new(
+            (frame_number / 1200.0).sin(),
+            0.0,
+            (frame_number / 1200.0).cos(),
+            1.0,
+        );
     }
 
     pub fn draw(&self, device: &VDevice, pipeline_layout: PipelineLayout, frame_data: &FrameData) {
@@ -73,11 +99,23 @@ impl Scene {
                 .map_memory(device, &[camera_data])
                 .expect("Failed to map memory.");
 
+            self.scene_buffer
+                .map_memory(device, &[self.scene_data])
+                .expect("Failed to map memory.");
+
+            let dynamic_offsets = &[pad_uniform_buffer_size(
+                size_of::<SceneData>() * frame_data.frame_index,
+                device
+                    .physical_device_properties()
+                    .limits
+                    .min_uniform_buffer_offset_alignment,
+            ) as u32];
             device.descriptor_sets(
                 frame_data.command_buffer,
                 PipelineBindPoint::GRAPHICS,
                 pipeline_layout,
                 &[frame_data.desc_set],
+                dynamic_offsets,
             );
 
             let mvp = Mat4::from_translation(model.transform.position)
