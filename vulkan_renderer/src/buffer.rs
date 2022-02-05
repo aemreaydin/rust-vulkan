@@ -1,5 +1,6 @@
 use crate::{
-    command_pool::VCommandPool, device::VDevice, enums::EOperationType, impl_get, RendererResult,
+    cmd::*, command_pool::VCommandPool, device::VDevice, enums::EOperationType, impl_get,
+    RendererResult,
 };
 use ash::vk::{
     Buffer, BufferCopy, BufferCreateInfo, BufferUsageFlags, CommandBufferBeginInfo,
@@ -136,7 +137,7 @@ impl VBuffer {
             device.get_queue_family_index(EOperationType::Graphics),
             CommandPoolCreateFlags::TRANSIENT,
         )?;
-        let command_buffer = device.allocate_command_buffers(command_pool.get(), 1)?[0];
+        let command_buffer = allocate_command_buffers(device, command_pool.get(), 1)?[0];
 
         unsafe {
             device.get().begin_command_buffer(

@@ -6,7 +6,7 @@ use ash::vk::{
     PhysicalDeviceMemoryProperties, SampleCountFlags, SharingMode,
 };
 
-#[derive(Clone, Copy, Default)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct VImage {
     image: Image,
     image_view: ImageView,

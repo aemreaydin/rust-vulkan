@@ -8,7 +8,7 @@ use crate::{
 use ash::vk::{PipelineBindPoint, PipelineLayout, ShaderStageFlags};
 use glam::{Mat4, Vec3, Vec4};
 use std::{collections::HashMap, mem::size_of};
-use vulkan_renderer::{buffer::VBuffer, device::VDevice, utils::pad_uniform_buffer_size};
+use vulkan_renderer::{buffer::VBuffer, cmd::*, device::VDevice, utils::pad_uniform_buffer_size};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SceneData {
@@ -74,12 +74,18 @@ impl Scene {
                 continue;
             };
 
-            device.bind_vertex_buffer(
+            cmd_bind_vertex_buffer(
+                device,
                 frame_data.command_buffer,
                 &[mesh.vertex_buffer.buffer()],
                 &[0],
             );
-            device.bind_index_buffer(frame_data.command_buffer, mesh.index_buffer.buffer(), 0);
+            cmd_bind_index_buffer(
+                device,
+                frame_data.command_buffer,
+                mesh.index_buffer.buffer(),
+                0,
+            );
 
             // Camera and Model
             let view = Mat4::look_at_rh(
@@ -107,7 +113,8 @@ impl Scene {
                     pad_uniform_buffer_size(device, size_of::<SceneData>() * frame_data.frame_index)
                         as u32,
                 ];
-            device.descriptor_sets(
+            cmd_bind_descriptor_sets(
+                device,
                 frame_data.command_buffer,
                 PipelineBindPoint::GRAPHICS,
                 pipeline_layout,
@@ -119,14 +126,20 @@ impl Scene {
                 * Mat4::from_rotation_y(model.transform.rotation.y);
             let constants = MeshPushConstants { mvp };
 
-            device.push_constants(
+            cmd_push_constants(
+                device,
                 frame_data.command_buffer,
                 pipeline_layout,
                 ShaderStageFlags::VERTEX,
                 constants.as_u8_slice(),
             );
 
-            device.draw_indexed(frame_data.command_buffer, mesh.indices.len() as u32, 1);
+            cmd_draw_indexed(
+                device,
+                frame_data.command_buffer,
+                mesh.indices.len() as u32,
+                1,
+            );
         }
     }
 }

@@ -15,6 +15,7 @@ use transform::Transform;
 use vertex::Vertex;
 use vulkan_renderer::{
     buffer::VBuffer,
+    cmd::*,
     descriptorset::{VDescriptorPool, VDescriptorSetLayout},
     device::VDevice,
     enums::EOperationType,
@@ -228,8 +229,8 @@ fn main() {
         let flash = (frame_count as f32 / 1200.0).sin().abs();
 
         // Begin Rendering
-        device
-            .begin_command_buffer(frame_data.command_buffer)
+
+        begin_command_buffer(&device, frame_data.command_buffer)
             .expect("Failed to begin command buffer.");
 
         let clear_values = &[
@@ -245,14 +246,16 @@ fn main() {
                 },
             },
         ];
-        device.begin_render_pass(
+        cmd_begin_render_pass(
+            &device,
             frame_data.command_buffer,
             framebuffers[image_ind],
             clear_values,
             surface.extent_2d(),
         );
 
-        device.bind_pipeline(
+        cmd_bind_pipeline(
+            &device,
             frame_data.command_buffer,
             PipelineBindPoint::GRAPHICS,
             pipeline.pipeline(),
@@ -272,8 +275,7 @@ fn main() {
         scene.draw(&device, pipeline.pipeline_layout(), frame_data);
 
         device.end_render_pass(frame_data.command_buffer);
-        device
-            .end_command_buffer(frame_data.command_buffer)
+        end_command_buffer(&device, frame_data.command_buffer)
             .expect("Failed to end command buffer.");
 
         let command_buffers = &[frame_data.command_buffer];

@@ -6,6 +6,7 @@ use ash::vk::{
 use std::mem::size_of;
 use vulkan_renderer::{
     buffer::VBuffer,
+    cmd::*,
     command_pool::VCommandPool,
     descriptorset::VDescriptorSet,
     device::VDevice,
@@ -42,7 +43,7 @@ impl FrameData {
             CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
         )?
         .get();
-        let command_buffer = device.allocate_command_buffers(command_pool, 1)?[0];
+        let command_buffer = allocate_command_buffers(device, command_pool, 1)?[0];
 
         let camera_buffer = VBuffer::new_uniform_buffer(
             device,
