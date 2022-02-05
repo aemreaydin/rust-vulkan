@@ -4,12 +4,11 @@ use crate::{
     macros::U8Slice,
     mesh::{Mesh, MeshPushConstants},
     model::Model,
-    utils::pad_uniform_buffer_size,
 };
 use ash::vk::{PipelineBindPoint, PipelineLayout, ShaderStageFlags};
 use glam::{Mat4, Vec3, Vec4};
 use std::{collections::HashMap, mem::size_of};
-use vulkan_renderer::{buffer::VBuffer, device::VDevice};
+use vulkan_renderer::{buffer::VBuffer, device::VDevice, utils::pad_uniform_buffer_size};
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct SceneData {
@@ -103,13 +102,11 @@ impl Scene {
                 .map_memory(device, &[self.scene_data])
                 .expect("Failed to map memory.");
 
-            let dynamic_offsets = &[pad_uniform_buffer_size(
-                size_of::<SceneData>() * frame_data.frame_index,
-                device
-                    .physical_device_properties()
-                    .limits
-                    .min_uniform_buffer_offset_alignment,
-            ) as u32];
+            let dynamic_offsets =
+                &[
+                    pad_uniform_buffer_size(device, size_of::<SceneData>() * frame_data.frame_index)
+                        as u32,
+                ];
             device.descriptor_sets(
                 frame_data.command_buffer,
                 PipelineBindPoint::GRAPHICS,

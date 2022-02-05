@@ -1,8 +1,8 @@
 use ash::vk::{
     ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags, DescriptorType,
-    Extent3D, Format, ImageAspectFlags, ImageUsageFlags, MemoryMapFlags, MemoryPropertyFlags,
-    PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange,
-    Rect2D, ShaderStageFlags, Viewport,
+    Extent3D, Format, ImageAspectFlags, ImageUsageFlags, MemoryPropertyFlags, PipelineBindPoint,
+    PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
+    ShaderStageFlags, Viewport,
 };
 use camera::Camera;
 use frame_data::FrameData;
@@ -12,7 +12,6 @@ use model::Model;
 use scene::{Scene, SceneData};
 use std::{collections::HashMap, mem::size_of};
 use transform::Transform;
-use utils::pad_uniform_buffer_size;
 use vertex::Vertex;
 use vulkan_renderer::{
     buffer::VBuffer,
@@ -27,6 +26,7 @@ use vulkan_renderer::{
     shader_utils::VShaderUtils,
     surface::VSurface,
     swapchain::VSwapchain,
+    utils::pad_uniform_buffer_size,
 };
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -40,7 +40,6 @@ mod mesh;
 mod model;
 mod scene;
 mod transform;
-mod utils;
 mod vertex;
 
 const NUM_FRAMES: usize = 3;
@@ -149,14 +148,8 @@ fn main() {
         .expect("Failed to create graphics pipeline.");
 
     // Frame Data
-    let scene_buffer_size = NUM_FRAMES as u64
-        * pad_uniform_buffer_size(
-            size_of::<SceneData>(),
-            device
-                .physical_device_properties()
-                .limits
-                .min_uniform_buffer_offset_alignment,
-        );
+    let scene_buffer_size =
+        NUM_FRAMES as u64 * pad_uniform_buffer_size(&device, size_of::<SceneData>());
     let scene_buffer = VBuffer::new_uniform_buffer(
         &device,
         scene_buffer_size,
@@ -267,29 +260,14 @@ fn main() {
 
         scene.update_scene(frame_count as f32);
 
-        unsafe {
-            let ptr = device
-                .get()
-                .map_memory(
-                    scene.scene_buffer.memory(),
-                    0,
-                    scene.scene_buffer.allocation(),
-                    MemoryMapFlags::empty(),
-                )
-                .expect("Failed to map memory.");
-            let ptr = ptr.offset(
-                pad_uniform_buffer_size(
-                    size_of::<SceneData>(),
-                    device
-                        .physical_device_properties()
-                        .limits
-                        .min_uniform_buffer_offset_alignment,
-                ) as isize
-                    * frame_index as isize,
-            );
-            std::ptr::copy_nonoverlapping(&scene.scene_data, ptr.cast(), 1);
-            device.get().unmap_memory(scene.scene_buffer.memory());
-        }
+        scene_buffer
+            .map_padded_memory(
+                &device,
+                &[scene.scene_data],
+                (frame_index as u64 * pad_uniform_buffer_size(&device, size_of::<SceneData>()))
+                    as isize,
+            )
+            .expect("Failed to map padded memory.");
 
         scene.draw(&device, pipeline.pipeline_layout(), frame_data);
 

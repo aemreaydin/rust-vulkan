@@ -1,5 +1,4 @@
 pub mod buffer;
-pub mod camera;
 pub mod command_pool;
 pub mod descriptorset;
 pub mod device;
@@ -16,6 +15,7 @@ pub mod shader_utils;
 pub mod surface;
 pub mod swapchain;
 pub mod sync;
+pub mod utils;
 
 pub use glam;
 pub(crate) type RendererError = Box<dyn std::error::Error>;

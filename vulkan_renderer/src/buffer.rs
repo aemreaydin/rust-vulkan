@@ -180,6 +180,26 @@ impl VBuffer {
         Ok(())
     }
 
+    pub fn map_padded_memory<T: Copy>(
+        &self,
+        device: &VDevice,
+        data: &[T],
+        pad_offset: isize,
+    ) -> RendererResult<()> {
+        unsafe {
+            let ptr = device.get().map_memory(
+                self.memory,
+                0,
+                self.allocation,
+                MemoryMapFlags::empty(),
+            )?;
+            let ptr = ptr.offset(pad_offset);
+            std::ptr::copy_nonoverlapping(data.as_ptr(), ptr.cast(), data.len());
+            device.get().unmap_memory(self.memory);
+        };
+        Ok(())
+    }
+
     fn buffer_create_info(size: u64, usage: BufferUsageFlags) -> BufferCreateInfo {
         BufferCreateInfo {
             size,
