@@ -1,14 +1,11 @@
-use crate::{
-    device::VDevice, instance::VInstance, physical_device::VPhysicalDevice, surface::VSurface,
-    RendererResult,
-};
+use crate::{device::VDevice, instance::VInstance, render_pass::VRenderPass, RendererResult};
 use ash::{
     extensions::khr::Swapchain,
     vk::{
-        ComponentMapping, ComponentSwizzle, CompositeAlphaFlagsKHR, Fence, Format, Handle, Image,
-        ImageAspectFlags, ImageSubresourceRange, ImageUsageFlags, ImageView, ImageViewCreateInfo,
-        ImageViewType, PresentInfoKHR, Queue, Semaphore, SharingMode, SurfaceTransformFlagsKHR,
-        SwapchainCreateInfoKHR, SwapchainKHR,
+        ColorSpaceKHR, ComponentMapping, ComponentSwizzle, CompositeAlphaFlagsKHR, Extent2D, Fence,
+        Format, Handle, Image, ImageAspectFlags, ImageSubresourceRange, ImageUsageFlags, ImageView,
+        ImageViewCreateInfo, ImageViewType, PresentInfoKHR, PresentModeKHR, Queue, RenderPass,
+        Semaphore, SharingMode, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
 pub struct VSwapchain {
@@ -16,34 +13,36 @@ pub struct VSwapchain {
     swapchain_khr: SwapchainKHR,
     images: Vec<Image>,
     image_views: Vec<ImageView>,
+    render_pass: VRenderPass,
 }
 
 impl VSwapchain {
-    pub fn new(
-        instance: &VInstance,
-        physical_device: &VPhysicalDevice,
-        device: &VDevice,
-        surface: &VSurface,
-    ) -> RendererResult<Self> {
+    pub fn new(instance: &VInstance, device: &VDevice, extent: Extent2D) -> RendererResult<Self> {
+        let format = Format::B8G8R8A8_SRGB;
+        let color_space = ColorSpaceKHR::SRGB_NONLINEAR;
+        let present_mode = PresentModeKHR::FIFO;
         let swapchain = Swapchain::new(instance.get(), device.get());
-        let create_info = Self::swapchain_create_info(physical_device, surface);
+        let create_info =
+            Self::swapchain_create_info(device, format, color_space, extent, present_mode);
         let swapchain_khr = unsafe { swapchain.create_swapchain(&create_info, None) }?;
         let images = unsafe { swapchain.get_swapchain_images(swapchain_khr)? };
-        let image_views = Self::create_image_views(physical_device, device, &images)?;
+        let image_views = Self::create_image_views(device, &images, format)?;
 
+        let render_pass = VRenderPass::new(device.get(), format)?;
         Ok(Self {
             swapchain,
             swapchain_khr,
             images,
             image_views,
+            render_pass,
         })
     }
 
-    pub fn swapchain(&self) -> &Swapchain {
+    pub fn get_swapchain(&self) -> &Swapchain {
         &self.swapchain
     }
 
-    pub fn swapchain_khr(&self) -> SwapchainKHR {
+    pub fn get_swapchain_khr(&self) -> SwapchainKHR {
         self.swapchain_khr
     }
 
@@ -57,6 +56,10 @@ impl VSwapchain {
 
     pub fn get_image_views(&self) -> &[ImageView] {
         &self.image_views
+    }
+
+    pub fn get_renderpass(&self) -> RenderPass {
+        self.render_pass.get()
     }
 
     pub fn acquire_next_image(
@@ -95,15 +98,10 @@ impl VSwapchain {
     }
 
     fn create_image_views(
-        physical_device: &VPhysicalDevice,
         device: &VDevice,
         images: &[Image],
+        format: Format,
     ) -> RendererResult<Vec<ImageView>> {
-        let format = physical_device
-            .physical_device_information()
-            .choose_surface_format()
-            .format;
-
         let image_views_result: Result<Vec<ImageView>, ash::vk::Result> = images
             .iter()
             .map(|&image| {
@@ -118,37 +116,35 @@ impl VSwapchain {
     }
 
     fn swapchain_create_info(
-        physical_device: &VPhysicalDevice,
-        surface: &VSurface,
+        device: &VDevice,
+        image_format: Format,
+        image_color_space: ColorSpaceKHR,
+        image_extent: Extent2D,
+        present_mode: PresentModeKHR,
     ) -> SwapchainCreateInfoKHR {
-        let phys_dev_info = physical_device.physical_device_information();
-        let min_image_count = phys_dev_info.surface_capabilities.min_image_count;
-        let max_image_count = phys_dev_info.surface_capabilities.max_image_count;
+        let surface_capabilities = device.get_surface_capabilities();
+        let min_image_count = surface_capabilities.min_image_count;
+        let max_image_count = surface_capabilities.max_image_count;
         let mut desired_image_count = min_image_count + 1;
         if max_image_count > 0 && desired_image_count > max_image_count {
             desired_image_count = max_image_count;
         }
 
-        let image_format = phys_dev_info.choose_surface_format().format;
-        let image_color_space = phys_dev_info.choose_surface_format().color_space;
-        let present_mode = phys_dev_info.choose_present_mode();
-        let image_extent = surface.extent_2d();
         let image_usage = ImageUsageFlags::COLOR_ATTACHMENT;
         let sharing_mode = SharingMode::EXCLUSIVE;
-        let pre_transform = if phys_dev_info
-            .surface_capabilities
+        let pre_transform = if surface_capabilities
             .supported_transforms
             .contains(SurfaceTransformFlagsKHR::IDENTITY)
         {
             SurfaceTransformFlagsKHR::IDENTITY
         } else {
-            phys_dev_info.surface_capabilities.current_transform
+            surface_capabilities.current_transform
         };
         let composite_alpha = CompositeAlphaFlagsKHR::OPAQUE;
         let clipped = true;
         let image_array_layers = 1;
         SwapchainCreateInfoKHR {
-            surface: surface.surface_khr(),
+            surface: device.get_surface_khr(),
             min_image_count: desired_image_count,
             image_format,
             image_color_space,
@@ -184,37 +180,5 @@ impl VSwapchain {
             },
             ..Default::default()
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{VDevice, VPhysicalDevice, VSwapchain};
-    use crate::{instance::VInstance, surface::VSurface, RendererResult};
-    use ash::vk::Handle;
-    use winit::platform::windows::EventLoopExtWindows;
-
-    #[test]
-    fn creates_swapchain() -> RendererResult<()> {
-        let instance = VInstance::new("Test", 0)?;
-
-        #[cfg(target_os = "windows")]
-        {
-            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
-            let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&instance, &physical_device)?;
-
-            let swapchain = VSwapchain::new(&instance, &physical_device, &device, &surface)?;
-            assert_ne!(swapchain.swapchain_khr.as_raw(), 0);
-
-            assert_eq!(swapchain.image_views.len(), swapchain.images.len());
-            for image in swapchain.images.iter() {
-                assert_ne!(image.as_raw(), 0);
-            }
-            for image_view in swapchain.image_views.iter() {
-                assert_ne!(image_view.as_raw(), 0);
-            }
-        }
-        Ok(())
     }
 }

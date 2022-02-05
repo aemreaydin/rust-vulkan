@@ -131,37 +131,3 @@ impl VRenderPass {
         vec![color_attachment, depth_attachment]
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        device::VDevice, instance::VInstance, physical_device::VPhysicalDevice, surface::VSurface,
-        RendererResult,
-    };
-    use ash::vk::Handle;
-    use winit::platform::windows::EventLoopExtWindows;
-
-    use super::VRenderPass;
-
-    #[test]
-    fn creates_renderpass() -> RendererResult<()> {
-        let instance = VInstance::new("Test", 0)?;
-
-        #[cfg(target_os = "windows")]
-        {
-            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
-            let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&instance, &physical_device)?;
-            let render_pass = VRenderPass::new(
-                device.get(),
-                physical_device
-                    .physical_device_information()
-                    .choose_surface_format()
-                    .format,
-            )?;
-
-            assert_ne!(render_pass.render_pass.as_raw(), 0);
-        }
-        Ok(())
-    }
-}

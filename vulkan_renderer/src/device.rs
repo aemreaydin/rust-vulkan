@@ -1,66 +1,103 @@
 use crate::{
     enums::EOperationType,
     instance::VInstance,
-    physical_device::VPhysicalDevice,
     queue_family::{VQueueFamilyIndices, VQueues},
-    render_pass::VRenderPass,
     RendererResult,
 };
 use ash::{
-    extensions::khr::Swapchain,
+    extensions::khr::{Surface, Swapchain},
     vk::{
-        CommandBuffer, DeviceCreateInfo, DeviceQueueCreateInfo, Fence,
+        CommandBuffer, DeviceCreateInfo, DeviceQueueCreateInfo, Fence, PhysicalDevice,
         PhysicalDeviceMemoryProperties, PhysicalDeviceProperties, PipelineStageFlags, Queue,
-        RenderPass, Semaphore, SubmitInfo,
+        QueueFlags, Semaphore, SubmitInfo, SurfaceCapabilitiesKHR, SurfaceKHR,
     },
-    Device,
+    Device, Instance,
 };
-use std::collections::HashSet;
+use winit::window::Window;
 
 /// Keeps tracks of the logical device, queues, command_pools and the render_pass
 pub struct VDevice {
     device: Device,
+
+    // Surface
+    surface_khr: SurfaceKHR,
+    surface_capabilities: SurfaceCapabilitiesKHR,
+
+    // Physical Device
+    physical_device: PhysicalDevice,
+    memory_properties: PhysicalDeviceMemoryProperties,
+    device_properties: PhysicalDeviceProperties,
+
+    // Queue
     queues: VQueues,
     queue_family_indices: VQueueFamilyIndices,
-    render_pass: VRenderPass,
-    memory_properties: PhysicalDeviceMemoryProperties,
-    physical_device_properties: PhysicalDeviceProperties,
 }
 
 impl VDevice {
-    pub fn new(instance: &VInstance, physical_device: &VPhysicalDevice) -> RendererResult<Self> {
-        let queue_infos = Self::device_queue_create_infos(physical_device.queue_family_indices());
+    pub fn new(instance: &VInstance, window: &Window) -> RendererResult<Self> {
+        // Physical Device
+        let physical_device = instance.select_physical_device()?;
+        let memory_properties = unsafe {
+            instance
+                .get()
+                .get_physical_device_memory_properties(physical_device)
+        };
+        let device_properties = unsafe {
+            instance
+                .get()
+                .get_physical_device_properties(physical_device)
+        };
+
+        // Surface
+        let entry = ash::Entry::linked();
+        let surface = Surface::new(&entry, instance.get());
+        let surface_khr =
+            unsafe { ash_window::create_surface(&entry, instance.get(), &window, None)? };
+        let surface_capabilities = unsafe {
+            surface.get_physical_device_surface_capabilities(physical_device, surface_khr)?
+        };
+
+        // Queue
+        let queue_family_indices = Self::select_queue_family_indices(
+            instance.get(),
+            physical_device,
+            &surface,
+            surface_khr,
+        );
+
+        let queue_create_infos = Self::device_queue_create_infos(queue_family_indices);
         let extensions = [Swapchain::name().as_ptr()];
-        let device_create_info = Self::device_create_info(&queue_infos, &extensions);
+        let device_create_info = Self::device_create_info(&queue_create_infos, &extensions);
         let device = unsafe {
             instance
                 .get()
-                .create_device(physical_device.get(), &device_create_info, None)?
+                .create_device(physical_device, &device_create_info, None)?
         };
 
-        let queues = VQueues::new(&device, physical_device.queue_family_indices());
-        let render_pass = VRenderPass::new(
-            &device,
-            physical_device
-                .physical_device_information()
-                .choose_surface_format()
-                .format,
-        )?;
+        let queues = VQueues::new(&device, queue_family_indices);
 
         Ok(Self {
             device,
+            physical_device,
+            memory_properties,
+            device_properties,
+            queue_family_indices,
             queues,
-            queue_family_indices: physical_device.queue_family_indices(),
-            render_pass,
-            memory_properties: physical_device
-                .physical_device_information()
-                .memory_properties,
-            physical_device_properties: physical_device.physical_device_information().properties,
+            surface_khr,
+            surface_capabilities,
         })
     }
 
     pub fn get(&self) -> &Device {
         &self.device
+    }
+
+    pub fn get_physical_device(&self) -> PhysicalDevice {
+        self.physical_device
+    }
+
+    pub fn get_surface_khr(&self) -> SurfaceKHR {
+        self.surface_khr
     }
 
     pub fn get_queue(&self, operation_type: EOperationType) -> Queue {
@@ -71,16 +108,76 @@ impl VDevice {
         self.queue_family_indices.get(operation_type)
     }
 
-    pub fn render_pass(&self) -> RenderPass {
-        self.render_pass.get()
-    }
-
-    pub fn memory_properties(&self) -> PhysicalDeviceMemoryProperties {
+    pub fn get_memory_properties(&self) -> PhysicalDeviceMemoryProperties {
         self.memory_properties
     }
 
-    pub fn physical_device_properties(&self) -> PhysicalDeviceProperties {
-        self.physical_device_properties
+    pub fn get_device_properties(&self) -> PhysicalDeviceProperties {
+        self.device_properties
+    }
+
+    pub fn get_surface_capabilities(&self) -> SurfaceCapabilitiesKHR {
+        self.surface_capabilities
+    }
+
+    fn select_queue_family_indices(
+        instance: &Instance,
+        physical_device: PhysicalDevice,
+        surface: &Surface,
+        surface_khr: SurfaceKHR,
+    ) -> VQueueFamilyIndices {
+        let queue_family_properties =
+            unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
+
+        let mut queue_family_indices = VQueueFamilyIndices::default();
+        for (ind, queue_family) in queue_family_properties.iter().enumerate() {
+            if queue_family.queue_flags.contains(QueueFlags::GRAPHICS) {
+                queue_family_indices.graphics = ind as u32;
+
+                if let Ok(supports_present) = unsafe {
+                    surface.get_physical_device_surface_support(
+                        physical_device,
+                        ind as u32,
+                        surface_khr,
+                    )
+                } {
+                    if supports_present {
+                        queue_family_indices.present = ind as u32;
+                        break;
+                    }
+                };
+            }
+        }
+
+        if queue_family_indices.present == u32::MAX {
+            for (ind, _) in queue_family_properties.iter().enumerate() {
+                if let Ok(supports_present) = unsafe {
+                    surface.get_physical_device_surface_support(
+                        physical_device,
+                        ind as u32,
+                        surface_khr,
+                    )
+                } {
+                    if supports_present {
+                        queue_family_indices.present = ind as u32;
+                        break;
+                    }
+                };
+            }
+        }
+
+        for (ind, queue_family) in queue_family_properties.iter().enumerate() {
+            if queue_family.queue_flags.contains(QueueFlags::COMPUTE) {
+                if queue_family_indices.compute == u32::MAX {
+                    queue_family_indices.compute = ind as u32;
+                }
+                if ind as u32 != queue_family_indices.graphics {
+                    queue_family_indices.compute = ind as u32;
+                    break;
+                }
+            }
+        }
+        queue_family_indices
     }
 
     pub fn create_queue_submit_info(
@@ -111,10 +208,6 @@ impl VDevice {
         Ok(())
     }
 
-    pub fn end_render_pass(&self, command_buffer: CommandBuffer) {
-        unsafe { self.device.cmd_end_render_pass(command_buffer) }
-    }
-
     pub fn wait_for_fences(&self, fences: &[Fence], timeout: u64) -> RendererResult<()> {
         unsafe { self.device.wait_for_fences(fences, true, timeout)? }
         Ok(())
@@ -142,11 +235,8 @@ impl VDevice {
     fn device_queue_create_infos(
         queue_family_indices: VQueueFamilyIndices,
     ) -> Vec<DeviceQueueCreateInfo> {
-        let unique_indices = HashSet::<u32>::from_iter([
-            queue_family_indices.compute,
-            queue_family_indices.graphics,
-            queue_family_indices.present,
-        ]);
+        let unique_indices =
+            Vec::from_iter([queue_family_indices.compute, queue_family_indices.graphics]);
         unique_indices
             .iter()
             .map(|&queue_family_index| DeviceQueueCreateInfo {
@@ -161,12 +251,12 @@ impl VDevice {
     #[allow(dead_code)]
     fn get_device_extensions(
         instance: &VInstance,
-        physical_device: &VPhysicalDevice,
+        physical_device: PhysicalDevice,
     ) -> RendererResult<()> {
         let extension_props = unsafe {
             instance
                 .get()
-                .enumerate_device_extension_properties(physical_device.get())?
+                .enumerate_device_extension_properties(physical_device)?
         };
         println!("{:#?}", extension_props);
         Ok(())

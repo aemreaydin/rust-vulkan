@@ -1,8 +1,8 @@
 use ash::vk::{
     ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags, DescriptorType,
-    Extent3D, Format, ImageAspectFlags, ImageUsageFlags, MemoryPropertyFlags, PipelineBindPoint,
-    PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
-    ShaderStageFlags, Viewport,
+    Extent2D, Extent3D, Format, ImageAspectFlags, ImageUsageFlags, MemoryPropertyFlags,
+    PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange,
+    Rect2D, ShaderStageFlags, Viewport,
 };
 use camera::Camera;
 use frame_data::FrameData;
@@ -22,16 +22,16 @@ use vulkan_renderer::{
     framebuffer::VFramebuffers,
     image::VImage,
     instance::VInstance,
-    physical_device::VPhysicalDevice,
     pipeline::VGraphicsPipelineBuilder,
     shader_utils::VShaderUtils,
-    surface::VSurface,
     swapchain::VSwapchain,
     utils::pad_uniform_buffer_size,
 };
 use winit::{
+    dpi::PhysicalSize,
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
 };
 
 mod camera;
@@ -46,15 +46,23 @@ mod vertex;
 const NUM_FRAMES: usize = 3;
 
 fn main() {
-    // Device Vars
+    // Window and Event Loop
     let event_loop = EventLoop::new();
+    let window = WindowBuilder::new()
+        .with_title("Vulkan Renderer")
+        .with_inner_size(PhysicalSize::new(1920, 1080))
+        .build(&event_loop)
+        .expect("Failed to create window.");
+    let extent = Extent2D {
+        width: window.inner_size().width,
+        height: window.inner_size().height,
+    };
+
+    // Instance, Device and Swapchain
     let instance = VInstance::new("Sample", 0).expect("Failed to create instance.");
-    let surface = VSurface::new(&instance, &event_loop).expect("Failed to create surface.");
-    let physical_device =
-        VPhysicalDevice::new(&instance, &surface).expect("Failed to create physical device.");
-    let device = VDevice::new(&instance, &physical_device).expect("Failed to create device.");
-    let swapchain = VSwapchain::new(&instance, &physical_device, &device, &surface)
-        .expect("Failed to create swapchain.");
+    let device = VDevice::new(&instance, &window).expect("Failed to create device.");
+    let swapchain =
+        VSwapchain::new(&instance, &device, extent).expect("Failed to create swapchain.");
 
     // Shader Vars
     let vertex_code = VShaderUtils::load_shader("sample/shaders/base.vert.spv")
@@ -68,8 +76,8 @@ fn main() {
 
     let depth_format = Format::D32_SFLOAT;
     let depth_extent = Extent3D {
-        width: surface.extent_2d().width,
-        height: surface.extent_2d().height,
+        width: extent.width,
+        height: extent.height,
         depth: 1,
     };
     let depth_image = VImage::new(
@@ -82,13 +90,8 @@ fn main() {
     .expect("Failed to create depth image.");
 
     // Framebuffer and command buffer
-    let framebuffers = VFramebuffers::new(
-        &device,
-        swapchain.get_image_views(),
-        depth_image.image_view(),
-        surface.dimensions(),
-    )
-    .expect("Failed to create framebuffers.");
+    let framebuffers = VFramebuffers::new(&device, &swapchain, depth_image.image_view(), extent)
+        .expect("Failed to create framebuffers.");
 
     // Descriptor Set
     let bindings = &[
@@ -120,11 +123,11 @@ fn main() {
         y: 0.0,
         max_depth: 1.0,
         min_depth: 0.0,
-        height: surface.extent_2d().height as f32,
-        width: surface.extent_2d().width as f32,
+        height: extent.height as f32,
+        width: extent.width as f32,
     }];
     let scissors = &[Rect2D {
-        extent: surface.extent_2d(),
+        extent,
         ..Default::default()
     }];
     let color_blend_attachments = &[PipelineColorBlendAttachmentState {
@@ -145,7 +148,7 @@ fn main() {
         .color_blend_state(color_blend_attachments)
         .pipeline_layout(descriptor_set_layouts, push_constants);
     let pipeline = builder
-        .build(&device)
+        .build(&device, swapchain.get_renderpass())
         .expect("Failed to create graphics pipeline.");
 
     // Frame Data
@@ -161,7 +164,7 @@ fn main() {
         .map(|frame_ind| {
             FrameData::new(
                 &device,
-                physical_device.queue_family_indices().graphics,
+                device.get_queue_family_index(EOperationType::Graphics),
                 descriptor_pool.get(),
                 &[descriptor_set_layout.get()],
                 scene_buffer,
@@ -249,9 +252,10 @@ fn main() {
         cmd_begin_render_pass(
             &device,
             frame_data.command_buffer,
+            swapchain.get_renderpass(),
             framebuffers[image_ind],
             clear_values,
-            surface.extent_2d(),
+            extent,
         );
 
         cmd_bind_pipeline(
@@ -274,7 +278,7 @@ fn main() {
 
         scene.draw(&device, pipeline.pipeline_layout(), frame_data);
 
-        device.end_render_pass(frame_data.command_buffer);
+        cmd_end_render_pass(&device, frame_data.command_buffer);
         end_command_buffer(&device, frame_data.command_buffer)
             .expect("Failed to end command buffer.");
 
@@ -298,7 +302,7 @@ fn main() {
             .expect("Failed to submit queue.");
 
         let image_indices = &[image_ind];
-        let swapchains = &[swapchain.swapchain_khr()];
+        let swapchains = &[swapchain.get_swapchain_khr()];
         let wait_semaphores = &[frame_data.render_semaphore.get()];
         let present_info =
             VSwapchain::create_present_info(image_indices, swapchains, wait_semaphores);

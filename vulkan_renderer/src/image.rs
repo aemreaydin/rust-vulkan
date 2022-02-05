@@ -28,7 +28,7 @@ impl VImage {
         let mem_req = Self::memory_requirements(device, image);
         let mem_type_ind = Self::find_memory_type_index(
             mem_req,
-            device.memory_properties(),
+            device.get_memory_properties(),
             MemoryPropertyFlags::DEVICE_LOCAL,
         );
 

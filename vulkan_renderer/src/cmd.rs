@@ -3,7 +3,7 @@ use ash::vk::{
     Buffer, ClearValue, CommandBuffer, CommandBufferAllocateInfo, CommandBufferBeginInfo,
     CommandBufferLevel, CommandBufferUsageFlags, CommandPool, DescriptorSet, DeviceSize, Extent2D,
     Framebuffer, IndexType, Offset2D, Pipeline, PipelineBindPoint, PipelineLayout, Rect2D,
-    RenderPassBeginInfo, ShaderStageFlags, SubpassContents,
+    RenderPass, RenderPassBeginInfo, ShaderStageFlags, SubpassContents,
 };
 
 pub fn allocate_command_buffers(
@@ -46,6 +46,7 @@ pub fn end_command_buffer(device: &VDevice, command_buffer: CommandBuffer) -> Re
 pub fn cmd_begin_render_pass(
     device: &VDevice,
     command_buffer: CommandBuffer,
+    render_pass: RenderPass,
     framebuffer: Framebuffer,
     clear_values: &[ClearValue],
     extent: Extent2D,
@@ -53,7 +54,7 @@ pub fn cmd_begin_render_pass(
     let render_pass_begin_info = RenderPassBeginInfo {
         clear_value_count: clear_values.len() as u32,
         p_clear_values: clear_values.as_ptr(),
-        render_pass: device.render_pass(),
+        render_pass,
         framebuffer,
         render_area: Rect2D {
             offset: Offset2D { x: 0, y: 0 },
@@ -167,4 +168,8 @@ pub fn cmd_draw_indexed(
             .get()
             .cmd_draw_indexed(command_buffer, index_count, instance_count, 0, 0, 0);
     }
+}
+
+pub fn cmd_end_render_pass(device: &VDevice, command_buffer: CommandBuffer) {
+    unsafe { device.get().cmd_end_render_pass(command_buffer) }
 }

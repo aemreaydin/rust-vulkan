@@ -47,7 +47,11 @@ impl VGraphicsPipelineBuilder {
         }
     }
 
-    pub fn build(&self, device: &VDevice) -> RendererResult<VGraphicsPipeline> {
+    pub fn build(
+        &self,
+        device: &VDevice,
+        render_pass: RenderPass,
+    ) -> RendererResult<VGraphicsPipeline> {
         let pipeline_layout = unsafe {
             device
                 .get()
@@ -56,7 +60,7 @@ impl VGraphicsPipelineBuilder {
         let create_infos = &[Self::graphics_pipeline_create_info(
             self,
             pipeline_layout,
-            device.render_pass(),
+            render_pass,
         )];
         let pipelines_result = unsafe {
             device

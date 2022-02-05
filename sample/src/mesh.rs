@@ -1,5 +1,5 @@
 use crate::{macros::impl_u8_slice, vertex::Vertex};
-use ash::vk::{BufferUsageFlags, Extent3D, ImageAspectFlags, ImageUsageFlags};
+use ash::vk::BufferUsageFlags;
 use glam::Mat4;
 use gltf::image::Data;
 use itertools::izip;
@@ -92,6 +92,7 @@ impl Mesh {
         Ok(Mesh::new(device, vertices, indices, images))
     }
 
+    #[allow(dead_code)]
     fn convert_gltf_format_to_ash_format(format: gltf::image::Format) -> ash::vk::Format {
         match format {
             gltf::image::Format::B8G8R8 => ash::vk::Format::B8G8R8_SRGB,

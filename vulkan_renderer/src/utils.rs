@@ -2,7 +2,7 @@ use crate::device::VDevice;
 
 pub fn pad_uniform_buffer_size(device: &VDevice, size: usize) -> u64 {
     let min_uniform_alignment = device
-        .physical_device_properties()
+        .get_device_properties()
         .limits
         .min_uniform_buffer_offset_alignment;
     let mut aligned_size = size as u64;

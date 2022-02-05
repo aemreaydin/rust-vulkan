@@ -1,12 +1,13 @@
 use crate::RendererResult;
 use ash::{
     extensions::ext::DebugUtils,
-    vk::{self, DebugUtilsMessengerEXT},
+    vk::{self, DebugUtilsMessengerEXT, PhysicalDevice, PhysicalDeviceType},
     Entry, Instance,
 };
 use colored::*;
 use std::{
     borrow::Cow,
+    collections::HashMap,
     ffi::{c_void, CStr, CString},
 };
 
@@ -83,8 +84,32 @@ impl VInstance {
         })
     }
 
+    pub fn select_physical_device(&self) -> RendererResult<PhysicalDevice> {
+        let devices = unsafe { self.instance.enumerate_physical_devices()? };
+
+        let mut score_map = HashMap::new();
+        for device in devices {
+            score_map.insert(Self::rate_device(&self.instance, device), device);
+        }
+        Ok(score_map
+            .into_iter()
+            .next()
+            .ok_or("Failed to find a physical device.")?
+            .1)
+    }
+
     pub fn get(&self) -> &Instance {
         &self.instance
+    }
+
+    fn rate_device(instance: &Instance, device: PhysicalDevice) -> usize {
+        let device_properties = unsafe { instance.get_physical_device_properties(device) };
+
+        match device_properties.device_type {
+            PhysicalDeviceType::DISCRETE_GPU => 100,
+            PhysicalDeviceType::INTEGRATED_GPU => 25,
+            _ => 0,
+        }
     }
 
     fn application_info(name: &str, application_version: u32) -> vk::ApplicationInfo {

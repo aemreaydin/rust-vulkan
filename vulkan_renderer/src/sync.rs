@@ -51,34 +51,3 @@ impl VSemaphore {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        device::VDevice, instance::VInstance, physical_device::VPhysicalDevice, surface::VSurface,
-        RendererResult,
-    };
-    use ash::vk::Handle;
-    use winit::platform::windows::EventLoopExtWindows;
-
-    use super::{VFence, VSemaphore};
-
-    #[test]
-    fn creates_syncs() -> RendererResult<()> {
-        let instance = VInstance::new("Test", 0)?;
-
-        #[cfg(target_os = "windows")]
-        {
-            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
-            let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&instance, &physical_device)?;
-
-            let fence = VFence::new(&device, true)?;
-            let semaphore = VSemaphore::new(&device)?;
-
-            assert_ne!(fence.fence.as_raw(), 0);
-            assert_ne!(semaphore.semaphore.as_raw(), 0);
-        }
-        Ok(())
-    }
-}

@@ -120,8 +120,11 @@ impl VBuffer {
         memory_requirements: MemoryRequirements,
         flags: MemoryPropertyFlags,
     ) -> RendererResult<DeviceMemory> {
-        let mem_type_ind =
-            Self::find_memory_type_index(memory_requirements, device.memory_properties(), flags);
+        let mem_type_ind = Self::find_memory_type_index(
+            memory_requirements,
+            device.get_memory_properties(),
+            flags,
+        );
         let allocate_info = Self::memory_allocate_info(mem_type_ind, memory_requirements.size);
         Ok(unsafe { device.get().allocate_memory(&allocate_info, None)? })
     }
@@ -242,39 +245,3 @@ impl VBuffer {
 impl_get!(VBuffer, buffer, Buffer);
 impl_get!(VBuffer, memory, DeviceMemory);
 impl_get!(VBuffer, allocation, u64);
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        device::VDevice, instance::VInstance, physical_device::VPhysicalDevice, surface::VSurface,
-        RendererResult,
-    };
-    use ash::vk::{BufferUsageFlags, Handle};
-    use winit::platform::windows::EventLoopExtWindows;
-
-    use super::VBuffer;
-
-    #[test]
-    fn creates_buffers() -> RendererResult<()> {
-        let instance = VInstance::new("Test", 0)?;
-
-        #[cfg(target_os = "windows")]
-        {
-            let surface = VSurface::new(&instance, &EventLoopExtWindows::new_any_thread())?;
-            let physical_device = VPhysicalDevice::new(&instance, &surface)?;
-            let device = VDevice::new(&instance, &physical_device)?;
-
-            let indices = vec![1, 2, 3];
-
-            let index_buffer = VBuffer::new_device_local_buffer(
-                &device,
-                &indices,
-                BufferUsageFlags::INDEX_BUFFER,
-            )?;
-
-            assert_ne!(index_buffer.buffer.as_raw(), 0);
-            assert_ne!(index_buffer.memory.as_raw(), 0);
-        }
-        Ok(())
-    }
-}
