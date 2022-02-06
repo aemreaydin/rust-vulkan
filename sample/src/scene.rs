@@ -53,18 +53,6 @@ impl Scene {
         self.meshes.get(&model.mesh_uuid)
     }
 
-    pub fn update_scene(&mut self, frame_number: f32) {
-        // for model in &mut self.models {
-        //     model.transform.rotation.y += delta_time as f32;
-        // }
-        self.scene_data.ambient_color = Vec4::new(
-            (frame_number / 1200.0).sin(),
-            0.0,
-            (frame_number / 1200.0).cos(),
-            1.0,
-        );
-    }
-
     pub fn draw(&self, device: &VDevice, pipeline_layout: PipelineLayout, frame_data: &FrameData) {
         for model in &self.models {
             let mesh = if let Some(mesh) = self.get_mesh(model) {

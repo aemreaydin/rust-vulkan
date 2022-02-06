@@ -11,7 +11,7 @@ use ash::vk::{
 };
 use std::ffi::CStr;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct VGraphicsPipeline {
     pipeline: Pipeline,
     pipeline_layout: PipelineLayout,

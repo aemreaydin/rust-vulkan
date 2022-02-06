@@ -1,8 +1,9 @@
+use app::App;
 use ash::vk::{
-    ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags, DescriptorType,
-    Extent2D, Extent3D, Format, ImageAspectFlags, ImageUsageFlags, MemoryPropertyFlags,
-    PipelineBindPoint, PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange,
-    Rect2D, ShaderStageFlags, Viewport,
+    ClearColorValue, ClearDepthStencilValue, ClearValue, ColorComponentFlags,
+    CommandPoolCreateFlags, DescriptorType, Extent2D, MemoryPropertyFlags, PipelineBindPoint,
+    PipelineColorBlendAttachmentState, PipelineStageFlags, PushConstantRange, Rect2D,
+    ShaderStageFlags, Viewport,
 };
 use camera::Camera;
 use frame_data::FrameData;
@@ -19,8 +20,6 @@ use vulkan_renderer::{
     descriptorset::{VDescriptorPool, VDescriptorSetLayout},
     device::VDevice,
     enums::EOperationType,
-    framebuffer::VFramebuffers,
-    image::VImage,
     instance::VInstance,
     pipeline::VGraphicsPipelineBuilder,
     shader_utils::VShaderUtils,
@@ -34,6 +33,7 @@ use winit::{
     window::WindowBuilder,
 };
 
+mod app;
 mod camera;
 mod frame_data;
 mod macros;
@@ -64,34 +64,18 @@ fn main() {
     let swapchain =
         VSwapchain::new(&instance, &device, extent).expect("Failed to create swapchain.");
 
-    // Shader Vars
+    let mut app = App::init(instance, device, swapchain, extent);
+    app.create_command_pool(CommandPoolCreateFlags::TRANSIENT);
+
+    // ! Move the shader code into the graphics pipeline
     let vertex_code = VShaderUtils::load_shader("sample/shaders/base.vert.spv")
         .expect("Failed to load vertex shader code.");
-    let vertex_shader_module = VShaderUtils::create_shader_module(&device, &vertex_code)
+    let vertex_shader_module = VShaderUtils::create_shader_module(&app.device, &vertex_code)
         .expect("Failed to create vertex shader module.");
     let fragment_code = VShaderUtils::load_shader("sample/shaders/base.frag.spv")
         .expect("Failed to load fragment shader code.");
-    let fragment_shader_module = VShaderUtils::create_shader_module(&device, &fragment_code)
+    let fragment_shader_module = VShaderUtils::create_shader_module(&app.device, &fragment_code)
         .expect("Failed to create fragment shader module.");
-
-    let depth_format = Format::D32_SFLOAT;
-    let depth_extent = Extent3D {
-        width: extent.width,
-        height: extent.height,
-        depth: 1,
-    };
-    let depth_image = VImage::new(
-        &device,
-        ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-        depth_format,
-        depth_extent,
-        ImageAspectFlags::DEPTH,
-    )
-    .expect("Failed to create depth image.");
-
-    // Framebuffer and command buffer
-    let framebuffers = VFramebuffers::new(&device, &swapchain, depth_image.image_view(), extent)
-        .expect("Failed to create framebuffers.");
 
     // Descriptor Set
     let bindings = &[
@@ -108,8 +92,9 @@ fn main() {
             ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT,
         ),
     ];
-    let descriptor_pool = VDescriptorPool::new(&device).expect("Failed to create descriptor pool.");
-    let descriptor_set_layout = VDescriptorSetLayout::new(&device, bindings)
+    let descriptor_pool =
+        VDescriptorPool::new(&app.device).expect("Failed to create descriptor pool.");
+    let descriptor_set_layout = VDescriptorSetLayout::new(&app.device, bindings)
         .expect("Failed to create descriptor set layout.");
 
     // Graphics Pipeline
@@ -148,14 +133,16 @@ fn main() {
         .color_blend_state(color_blend_attachments)
         .pipeline_layout(descriptor_set_layouts, push_constants);
     let pipeline = builder
-        .build(&device, swapchain.get_renderpass())
+        .build(&app.device, app.swapchain.get_renderpass())
         .expect("Failed to create graphics pipeline.");
+
+    app.create_graphics_pipeline(pipeline);
 
     // Frame Data
     let scene_buffer_size =
-        NUM_FRAMES as u64 * pad_uniform_buffer_size(&device, size_of::<SceneData>());
+        NUM_FRAMES as u64 * pad_uniform_buffer_size(&app.device, size_of::<SceneData>());
     let scene_buffer = VBuffer::new_uniform_buffer(
-        &device,
+        &app.device,
         scene_buffer_size,
         MemoryPropertyFlags::HOST_COHERENT | MemoryPropertyFlags::HOST_VISIBLE,
     )
@@ -163,8 +150,8 @@ fn main() {
     let frame_datas = (0..NUM_FRAMES)
         .map(|frame_ind| {
             FrameData::new(
-                &device,
-                device.get_queue_family_index(EOperationType::Graphics),
+                &app.device,
+                app.device.get_queue_family_index(EOperationType::Graphics),
                 descriptor_pool.get(),
                 &[descriptor_set_layout.get()],
                 scene_buffer,
@@ -181,8 +168,11 @@ fn main() {
     };
     let meshes = HashMap::from_iter([(
         "Helmet".to_owned(),
-        Mesh::from_file(&device, "sample/assets/damaged_helmet/damaged_helmet.glb")
-            .expect("Failed to load model."),
+        Mesh::from_file(
+            &app.device,
+            "sample/assets/damaged_helmet/damaged_helmet.glb",
+        )
+        .expect("Failed to load model."),
     )]);
 
     let mut scene = Scene::new(camera, SceneData::default(), scene_buffer, meshes);
@@ -203,43 +193,31 @@ fn main() {
         },
     ]);
 
-    // let mut current_time = Instant::now();
     let mut frame_count = 0;
     event_loop.run(move |event, _, control_flow| {
-        // let new_time = Instant::now();
-        // let delta_time = (new_time - current_time).as_millis() as f64 / 1.0e3;
-        // current_time = new_time;
-
         let frame_index = frame_count % NUM_FRAMES;
         let frame_data = &frame_datas[frame_index];
 
         let fences = &[frame_data.fence.get()];
-        device
+        app.device
             .wait_for_fences(fences, 1_000_000_000)
             .expect("Failed to wait for fences.");
-        device
+        app.device
             .reset_fences(fences)
             .expect("Failed to reset fences.");
 
-        let (image_ind, _is_suboptimal) = swapchain
-            .acquire_next_image(
-                1_000_000_000,
-                Some(frame_data.present_semaphore.get()),
-                None,
-            )
+        let _is_suboptimal = app
+            .swapchain
+            .acquire_next_image(Some(frame_data.present_semaphore.get()), None)
             .expect("Failed to acquire next image.");
 
-        let flash = (frame_count as f32 / 1200.0).sin().abs();
-
-        // Begin Rendering
-
-        begin_command_buffer(&device, frame_data.command_buffer)
+        begin_command_buffer(&app.device, frame_data.command_buffer)
             .expect("Failed to begin command buffer.");
 
         let clear_values = &[
             ClearValue {
                 color: ClearColorValue {
-                    float32: [0.0, 0.0, flash, 1.0],
+                    float32: [0.0, 0.0, 0.0, 1.0],
                 },
             },
             ClearValue {
@@ -250,36 +228,34 @@ fn main() {
             },
         ];
         cmd_begin_render_pass(
-            &device,
+            &app.device,
             frame_data.command_buffer,
-            swapchain.get_renderpass(),
-            framebuffers[image_ind],
+            app.swapchain.get_renderpass(),
+            app.swapchain.get_current_framebuffer(),
             clear_values,
             extent,
         );
 
         cmd_bind_pipeline(
-            &device,
+            &app.device,
             frame_data.command_buffer,
             PipelineBindPoint::GRAPHICS,
             pipeline.pipeline(),
         );
 
-        scene.update_scene(frame_count as f32);
-
         scene_buffer
             .map_padded_memory(
-                &device,
+                &app.device,
                 &[scene.scene_data],
-                (frame_index as u64 * pad_uniform_buffer_size(&device, size_of::<SceneData>()))
+                (frame_index as u64 * pad_uniform_buffer_size(&app.device, size_of::<SceneData>()))
                     as isize,
             )
             .expect("Failed to map padded memory.");
 
-        scene.draw(&device, pipeline.pipeline_layout(), frame_data);
+        scene.draw(&app.device, pipeline.pipeline_layout(), frame_data);
 
-        cmd_end_render_pass(&device, frame_data.command_buffer);
-        end_command_buffer(&device, frame_data.command_buffer)
+        cmd_end_render_pass(&app.device, frame_data.command_buffer);
+        end_command_buffer(&app.device, frame_data.command_buffer)
             .expect("Failed to end command buffer.");
 
         let command_buffers = &[frame_data.command_buffer];
@@ -293,21 +269,20 @@ fn main() {
             pipeline_stage_flags,
         );
 
-        device
+        app.device
             .queue_submit(
-                device.get_queue(EOperationType::Graphics),
+                app.device.get_queue(EOperationType::Graphics),
                 &[submit_info],
                 frame_data.fence.get(),
             )
             .expect("Failed to submit queue.");
 
-        let image_indices = &[image_ind];
-        let swapchains = &[swapchain.get_swapchain_khr()];
         let wait_semaphores = &[frame_data.render_semaphore.get()];
-        let present_info =
-            VSwapchain::create_present_info(image_indices, swapchains, wait_semaphores);
-        swapchain
-            .queue_present(device.get_queue(EOperationType::Graphics), present_info)
+        app.swapchain
+            .queue_present(
+                app.device.get_queue(EOperationType::Graphics),
+                wait_semaphores,
+            )
             .expect("Failed to present queue.");
 
         *control_flow = ControlFlow::Poll;

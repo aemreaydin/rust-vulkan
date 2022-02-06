@@ -1,26 +1,39 @@
-use crate::{device::VDevice, instance::VInstance, render_pass::VRenderPass, RendererResult};
+use crate::{
+    device::VDevice, framebuffer::VFramebuffers, image::VImage, instance::VInstance,
+    render_pass::VRenderPass, RendererResult,
+};
 use ash::{
     extensions::khr::Swapchain,
     vk::{
-        ColorSpaceKHR, ComponentMapping, ComponentSwizzle, CompositeAlphaFlagsKHR, Extent2D, Fence,
-        Format, Handle, Image, ImageAspectFlags, ImageSubresourceRange, ImageUsageFlags, ImageView,
-        ImageViewCreateInfo, ImageViewType, PresentInfoKHR, PresentModeKHR, Queue, RenderPass,
-        Semaphore, SharingMode, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
+        ColorSpaceKHR, ComponentMapping, ComponentSwizzle, CompositeAlphaFlagsKHR, Extent2D,
+        Extent3D, Fence, Format, Framebuffer, Handle, Image, ImageAspectFlags,
+        ImageSubresourceRange, ImageUsageFlags, ImageView, ImageViewCreateInfo, ImageViewType,
+        PresentInfoKHR, PresentModeKHR, Queue, RenderPass, Semaphore, SharingMode,
+        SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
+
 pub struct VSwapchain {
     swapchain: Swapchain,
     swapchain_khr: SwapchainKHR,
+
     images: Vec<Image>,
     image_views: Vec<ImageView>,
+    framebuffers: Vec<Framebuffer>,
     render_pass: VRenderPass,
+
+    depth_image: VImage,
+    depth_format: Format,
+
+    image_index: usize,
 }
 
 impl VSwapchain {
     pub fn new(instance: &VInstance, device: &VDevice, extent: Extent2D) -> RendererResult<Self> {
         let format = Format::B8G8R8A8_SRGB;
         let color_space = ColorSpaceKHR::SRGB_NONLINEAR;
-        let present_mode = PresentModeKHR::FIFO;
+        let present_mode = PresentModeKHR::MAILBOX;
+
         let swapchain = Swapchain::new(instance.get(), device.get());
         let create_info =
             Self::swapchain_create_info(device, format, color_space, extent, present_mode);
@@ -28,13 +41,42 @@ impl VSwapchain {
         let images = unsafe { swapchain.get_swapchain_images(swapchain_khr)? };
         let image_views = Self::create_image_views(device, &images, format)?;
 
+        let depth_format = Format::D32_SFLOAT;
+        let depth_image = VImage::new(
+            device,
+            ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            depth_format,
+            Extent3D {
+                width: extent.width,
+                height: extent.height,
+                depth: 1,
+            },
+            ImageAspectFlags::DEPTH,
+        )
+        .expect("Failed to create depth buffer.");
         let render_pass = VRenderPass::new(device.get(), format)?;
+        let framebuffers = VFramebuffers::new(
+            device,
+            &image_views,
+            depth_image.image_view(),
+            render_pass.get(),
+            extent,
+        )
+        .expect("Failed to create framebuffers")
+        .get_framebuffers();
+
         Ok(Self {
             swapchain,
             swapchain_khr,
             images,
             image_views,
+            framebuffers,
             render_pass,
+
+            depth_format: Format::D32_SFLOAT,
+            depth_image,
+
+            image_index: 0,
         })
     }
 
@@ -46,12 +88,16 @@ impl VSwapchain {
         self.swapchain_khr
     }
 
-    pub fn get_image(&self, image_ind: usize) -> Option<Image> {
-        self.images.get(image_ind).copied()
+    pub fn get_current_image(&self) -> Image {
+        self.images[self.image_index]
     }
 
-    pub fn get_image_view(&self, image_ind: usize) -> Option<ImageView> {
-        self.image_views.get(image_ind).copied()
+    pub fn get_current_image_view(&self) -> ImageView {
+        self.image_views[self.image_index]
+    }
+
+    pub fn get_current_framebuffer(&self) -> Framebuffer {
+        self.framebuffers[self.image_index]
     }
 
     pub fn get_image_views(&self) -> &[ImageView] {
@@ -62,37 +108,38 @@ impl VSwapchain {
         self.render_pass.get()
     }
 
+    pub fn get_depth_image(&self) -> VImage {
+        self.depth_image
+    }
+
+    pub fn get_depth_format(&self) -> Format {
+        self.depth_format
+    }
+
     pub fn acquire_next_image(
-        &self,
-        timeout: u64,
+        &mut self,
         semaphore: Option<Semaphore>,
         fence: Option<Fence>,
-    ) -> RendererResult<(u32, bool)> {
+    ) -> RendererResult<bool> {
         let fence = fence.unwrap_or_else(|| Fence::from_raw(0));
         let semaphore = semaphore.unwrap_or_else(|| Semaphore::from_raw(0));
-        let next_image = unsafe {
+        let (image_index, is_suboptimal) = unsafe {
             self.swapchain
-                .acquire_next_image(self.swapchain_khr, timeout, semaphore, fence)?
+                .acquire_next_image(self.swapchain_khr, u64::MAX, semaphore, fence)?
         };
-        Ok(next_image)
+        self.image_index = image_index as usize;
+        Ok(is_suboptimal)
     }
 
-    pub fn create_present_info(
-        image_indices: &[u32],
-        swapchains: &[SwapchainKHR],
-        wait_semaphores: &[Semaphore],
-    ) -> PresentInfoKHR {
-        PresentInfoKHR {
-            p_image_indices: image_indices.as_ptr(),
+    pub fn queue_present(&self, queue: Queue, wait_semaphores: &[Semaphore]) -> RendererResult<()> {
+        let present_info = PresentInfoKHR {
+            p_image_indices: &(self.image_index as u32),
             wait_semaphore_count: wait_semaphores.len() as u32,
             p_wait_semaphores: wait_semaphores.as_ptr(),
-            swapchain_count: swapchains.len() as u32,
-            p_swapchains: swapchains.as_ptr(),
+            swapchain_count: 1,
+            p_swapchains: &self.swapchain_khr,
             ..Default::default()
-        }
-    }
-
-    pub fn queue_present(&self, queue: Queue, present_info: PresentInfoKHR) -> RendererResult<()> {
+        };
         unsafe { self.swapchain.queue_present(queue, &present_info)? };
         Ok(())
     }

@@ -1,7 +1,7 @@
 use crate::{device::VDevice, RendererResult};
 use ash::vk::{CommandPool, CommandPoolCreateFlags, CommandPoolCreateInfo};
 
-#[derive(Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct VCommandPool {
     command_pool: CommandPool,
 }

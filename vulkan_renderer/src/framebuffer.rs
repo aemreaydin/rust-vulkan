@@ -1,7 +1,8 @@
-use crate::{device::VDevice, swapchain::VSwapchain, RendererResult};
+use crate::{device::VDevice, RendererResult};
 use ash::vk::{Extent2D, Framebuffer, FramebufferCreateInfo, ImageView, RenderPass};
 use std::ops::Index;
 
+#[derive(Default, Debug)]
 pub struct VFramebuffers {
     framebuffers: Vec<Framebuffer>,
 }
@@ -9,17 +10,16 @@ pub struct VFramebuffers {
 impl VFramebuffers {
     pub fn new(
         device: &VDevice,
-        swapchain: &VSwapchain,
+        image_views: &[ImageView],
         depth_image_view: ImageView,
+        render_pass: RenderPass,
         extent: Extent2D,
     ) -> RendererResult<Self> {
-        let framebuffers_result: Result<Vec<Framebuffer>, ash::vk::Result> = swapchain
-            .get_image_views()
+        let framebuffers_result: Result<Vec<Framebuffer>, ash::vk::Result> = image_views
             .iter()
             .map(|&image_view| {
                 let attachments = vec![image_view, depth_image_view];
-                let create_info =
-                    Self::framebuffer_create_info(&attachments, swapchain.get_renderpass(), extent);
+                let create_info = Self::framebuffer_create_info(&attachments, render_pass, extent);
                 unsafe { device.get().create_framebuffer(&create_info, None) }
             })
             .collect();
@@ -34,6 +34,10 @@ impl VFramebuffers {
 
     pub fn get(&self, framebuffer_ind: usize) -> Option<Framebuffer> {
         self.framebuffers.get(framebuffer_ind).copied()
+    }
+
+    pub fn get_framebuffers(&self) -> Vec<Framebuffer> {
+        self.framebuffers.clone()
     }
 
     fn framebuffer_create_info(
