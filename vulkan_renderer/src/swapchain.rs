@@ -1,14 +1,13 @@
 use crate::{
-    device::VDevice, framebuffer::VFramebuffers, image::VImage, instance::VInstance,
-    render_pass::VRenderPass, RendererResult,
+    device::VDevice, image::VImage, instance::VInstance, render_pass::VRenderPass, RendererResult,
 };
 use ash::{
     extensions::khr::Swapchain,
     vk::{
         ColorSpaceKHR, ComponentMapping, ComponentSwizzle, CompositeAlphaFlagsKHR, Extent2D,
-        Extent3D, Fence, Format, Framebuffer, Handle, Image, ImageAspectFlags,
-        ImageSubresourceRange, ImageUsageFlags, ImageView, ImageViewCreateInfo, ImageViewType,
-        PresentInfoKHR, PresentModeKHR, Queue, RenderPass, Semaphore, SharingMode,
+        Extent3D, Fence, Format, Framebuffer, FramebufferCreateInfo, Handle, Image,
+        ImageAspectFlags, ImageSubresourceRange, ImageUsageFlags, ImageView, ImageViewCreateInfo,
+        ImageViewType, PresentInfoKHR, PresentModeKHR, Queue, RenderPass, Semaphore, SharingMode,
         SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
@@ -55,15 +54,13 @@ impl VSwapchain {
         )
         .expect("Failed to create depth buffer.");
         let render_pass = VRenderPass::new(device.get(), format)?;
-        let framebuffers = VFramebuffers::new(
+        let framebuffers = Self::create_framebuffers(
             device,
             &image_views,
             depth_image.image_view(),
             render_pass.get(),
             extent,
-        )
-        .expect("Failed to create framebuffers")
-        .get_framebuffers();
+        );
 
         Ok(Self {
             swapchain,
@@ -159,6 +156,36 @@ impl VSwapchain {
         match image_views_result {
             Ok(image_views) => Ok(image_views),
             Err(err) => Err(Box::new(err)),
+        }
+    }
+
+    fn create_framebuffers(
+        device: &VDevice,
+        image_views: &[ImageView],
+        depth_image_view: ImageView,
+        render_pass: RenderPass,
+        extent: Extent2D,
+    ) -> Vec<Framebuffer> {
+        let framebuffers_result: Result<Vec<Framebuffer>, ash::vk::Result> = image_views
+            .iter()
+            .map(|&image_view| {
+                let attachments = vec![image_view, depth_image_view];
+                let create_info = FramebufferCreateInfo {
+                    attachment_count: attachments.len() as u32,
+                    p_attachments: attachments.as_ptr(),
+                    render_pass,
+                    width: extent.width,
+                    height: extent.height,
+                    layers: 1,
+                    ..Default::default()
+                };
+                unsafe { device.get().create_framebuffer(&create_info, None) }
+            })
+            .collect();
+
+        match framebuffers_result {
+            Ok(framebuffers) => framebuffers,
+            Err(_) => panic!("Failed to create framebuffers."),
         }
     }
 
